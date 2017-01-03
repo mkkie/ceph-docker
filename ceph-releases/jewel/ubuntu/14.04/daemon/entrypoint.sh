@@ -837,10 +837,10 @@ function start_restapi {
   check_admin_key
 
   # Check to see if we need to add a [client.restapi] section; add, if necessary
-  if [[ ! "$(egrep "\[client.restapi\]" /etc/ceph/${CLUSTER}.conf)" ]]; then
+  if [[ ! "$(egrep "\[client.admin\]" /etc/ceph/${CLUSTER}.conf)" ]]; then
     cat <<ENDHERE >>/etc/ceph/${CLUSTER}.conf
 
-[client.restapi]
+[client.admin]
   public addr = ${RESTAPI_IP}:${RESTAPI_PORT}
   restapi base url = ${RESTAPI_BASE_URL}
   restapi log level = ${RESTAPI_LOG_LEVEL}
