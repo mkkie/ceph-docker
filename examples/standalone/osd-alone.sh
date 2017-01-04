@@ -1,7 +1,13 @@
 #! /bin/bash
 
-image=cdxvirt/ceph-daemon:dev
- : ${OSD_FORCE_ZAP:=0}
+: ${image:=cdxvirt/ceph-daemon:dev}
+: ${OSD_FORCE_ZAP:=0}
+: ${LOG_TIMEOUT:=10}
+: ${DEBUG_MODE:=false}
+: ${OSD_TMP_LOG:=osd-prepare.log}
+: ${PATH_CEPH_CONF:=/etc/ceph}
+: ${PATH_CEPH_DATA:=/var/lib/ceph}
+
 CONT_ID=$(docker ps -q -f LABEL=CEPH=osd -f LABEL=OSD_DEVICE=${OSD_DEVICE})
 
 function check_disk {
@@ -28,17 +34,18 @@ function run_osd {
 }
 
 function prepare_osd {
+ echo "Preparing..."
  if docker run --privileged=true -v /dev/:/dev/ \
       --net=host --pid=host \
-      -e DEBUG_MODE=false \
+      -e DEBUG_MODE=${DEBUG_MODE} \
       -e OSD_DEVICE=${OSD_DEVICE} \
       -e OSD_TYPE=prepare \
       -e OSD_FORCE_ZAP=${OSD_FORCE_ZAP} \
-      -v /etc/ceph:/etc/ceph \
-      -v /var/lib/ceph/:/var/lib/ceph/ \
-      ${image} osd >osd-prepare.log; then
+      -v ${PATH_CEPH_CONF}:/etc/ceph \
+      -v ${PATH_CEPH_DATA}:/var/lib/ceph/ \
+      ${image} osd &>${OSD_TMP_LOG}; then
     return 0
-  elif grep -q "You can also use the zap_device scenario on the appropriate device to zap it" osd-prepare.log; then
+  elif grep -q "You can also use the zap_device scenario on the appropriate device to zap it" ${OSD_TMP_LOG}; then
     return 0
   else 
     return 1
@@ -49,11 +56,11 @@ function activate_osd {
   CONT_ID=$(docker run --privileged=true -v /dev/:/dev/ \
     --net=host --pid=host \
     -l CEPH=osd -l OSD_DEVICE=${OSD_DEVICE} \
-    -e DEBUG_MODE=false \
+    -e DEBUG_MODE=${DEBUG_MODE} \
     -e OSD_DEVICE=${OSD_DEVICE} \
     -e OSD_TYPE=activate \
-    -v /etc/ceph:/etc/ceph \
-    -v /var/lib/ceph/:/var/lib/ceph/ \
+    -v ${PATH_CEPH_CONF}:/etc/ceph \
+    -v ${PATH_CEPH_DATA}:/var/lib/ceph/ \
     -d ${image} osd | cut -c 1-12)
 }
 
@@ -66,10 +73,10 @@ function check_activate {
       exit 4
     else
       let counter=counter+1
-      sleep 3
+      sleep 1
     fi
   done
-   timeout 10 docker logs -f ${CONT_ID} || return 0
+   timeout ${LOG_TIMEOUT} docker logs -f ${CONT_ID} || return 0
 }
 
 case $1 in
@@ -78,8 +85,9 @@ case $1 in
     docker stop "${CONT_ID}"
     ;;
   stop-all)
-    if [ ! -z $(docker ps -q -f LABEL=CEPH=osd) ]; then
-      docker stop $(docker ps -q -f LABEL=CEPH=osd)
+    STOP_LIST=$(docker ps -q -f LABEL=CEPH=osd)
+    if [ -n "${STOP_LIST}" ]; then
+      docker stop ${STOP_LIST}
     fi
     ;;
   start)
