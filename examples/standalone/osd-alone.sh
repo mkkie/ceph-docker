@@ -6,7 +6,7 @@ CONT_ID=$(docker ps -q -f LABEL=CEPH=osd -f LABEL=OSD_DEVICE=${OSD_DEVICE})
 
 function check_disk {
   if [ -z ${OSD_DEVICE} ]; then
-    echo "OSD_DEVICE=/dev/sdx $0 start"
+    echo "OSD_DEVICE=/dev/sdx $0 [start|stop]"
     exit 1
   else
     sudo fdisk -l ${OSD_DEVICE} &>/dev/null || exit 2
@@ -69,7 +69,7 @@ function check_activate {
       sleep 3
     fi
   done
-   timeout 30 docker logs -f ${CONT_ID} || return 0
+   timeout 10 docker logs -f ${CONT_ID} || return 0
 }
 
 case $1 in
@@ -78,7 +78,7 @@ case $1 in
     docker stop "${CONT_ID}"
     ;;
   stop-all)
-    docker stop $(docker ps -q -f LABEL=CEPH=osd)
+    docker stop "$(docker ps -q -f LABEL=CEPH=osd)"
     ;;
   start)
     check_disk
