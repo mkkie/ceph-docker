@@ -1,15 +1,13 @@
 Ceph Cluster Standalone
 =
 
+Start
+---
+
 Deploy & start Ceph monitor
 ```sh
 $ ./mon-alone.sh start
 $ ./mon-alone.sh initial
-```
-
-Command line
-```sh
-$ ./mon-alone.sh bash
 ```
 
 Deploy & start OSD
@@ -17,16 +15,13 @@ Deploy & start OSD
 $ OSD_DEVICE=/dev/sdb ./osd-alone.sh start
 ```
 
-Force to format disk & start OSD
+If disk was an OSD, force to format disk & start OSD
 ```sh
 $ OSD_FORCE_ZAP=1 OSD_DEVICE=/dev/sdb ./osd-alone.sh start
 ```
 
-List OSDs
-```sh
-$ ./osd-alone.sh list
-$ ./osd-alone.sh list-id
-```
+Stop
+---
 
 Stop some OSD
 ```sh
@@ -37,6 +32,20 @@ Stop Ceph Cluster
 ```sh
 $ ./osd-alone.sh stop-all
 $ ./mon-alone.sh stop
+```
+
+Tools
+---
+
+Command line
+```sh
+$ ./mon-alone.sh bash
+```
+
+List OSDs
+```sh
+$ ./osd-alone.sh list
+$ ./osd-alone.sh list-id
 ```
 
 Cleanup

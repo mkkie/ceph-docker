@@ -78,7 +78,9 @@ case $1 in
     docker stop "${CONT_ID}"
     ;;
   stop-all)
-    docker stop "$(docker ps -q -f LABEL=CEPH=osd)"
+    if [ ! -z $(docker ps -q -f LABEL=CEPH=osd) ]; then
+      docker stop $(docker ps -q -f LABEL=CEPH=osd)
+    fi
     ;;
   start)
     check_disk

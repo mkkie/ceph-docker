@@ -26,7 +26,7 @@ case $1 in
     ;;
   start)
     run_mon
-    timeout 10 docker logs -f ${CONT_ID} || return 0
+    timeout 10 docker logs -f ${CONT_ID} || true
     ;;
   bash)
     docker exec -it "${CONT_ID}" bash
