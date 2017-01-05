@@ -34,6 +34,21 @@ $ ./osd-alone.sh stop-all
 $ ./mon-alone.sh stop
 ```
 
+Deploy another node
+---
+
+Copy configuration & keyring
+```sh
+A-node $ sudo scp -r /etc/ceph/ /var/lib/ceph/bootstrap-{mds,osd,rgw} B-node:/tmp
+B-node $ sudo mkdir -p /var/lib/ceph; sudo mv /tmp/ceph/ /etc/; sudo mv /tmp/bootstrap-{mds,osd,rgw} /var/lib/ceph
+```
+
+Deploy Ceph service
+```sh
+B-node $ ./mon-alone.sh start
+B-node $ OSD_DEVICE=/dev/sdb ./osd-alone.sh start
+```
+
 Tools
 ---
 
