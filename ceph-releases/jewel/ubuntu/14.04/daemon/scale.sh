@@ -218,9 +218,10 @@ function remove_mon () {
     local mon_name=$(node_ip_2_hostname ${mon_node})
     if [ "$1" == "${mon_name}" ]; then
       etcdctl -C ${KV_IP}:${KV_PORT} rm ${CLUSTER_PATH}/mon_host/${mon_name} &>/dev/null || true
+      etcdctl -C ${KV_IP}:${KV_PORT} set ${CLUSTER_PATH}/lock --ttl=120 &>/dev/null
+      ceph mon remove "${mon_name}" || true
       kubectl label node --server=${K8S_IP}:${K8S_PORT} ${K8S_CERT} ${mon_node} \
         ${MON_LABEL}- &>/dev/null
-      ceph mon remove "${mon_name}" || true
     fi
   done
   until confd -onetime -backend ${KV_TYPE} -node ${CONFD_NODE_SCHEMA}${KV_IP}:${KV_PORT} ${CONFD_KV_TLS} -prefix="/${CLUSTER_PATH}/" ; do
