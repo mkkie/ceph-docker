@@ -28,7 +28,7 @@ function log_warn() { log "$1" "WARN" "${LOG_WARN_COLOR}"; }
 
 function ceph_api () {
   case $1 in
-    start_all_osds|set_max_osd|get_max_osd|stop_all_osds|stop_all_osds|get_active_osd_nums|run_osds)
+    start_all_osds|set_max_osd|get_max_osd|stop_all_osds|stop_all_osds|get_active_osd_nums|run_osds|osd_health_check)
       osd_controller_env
       $@
       ;;
@@ -36,7 +36,7 @@ function ceph_api () {
       mon_controller_env
       $@
       ;;
-    get_osd_map)
+    get_osd_map|update_ceph_conf)
       $@
       ;;
     *)
@@ -224,7 +224,12 @@ function remove_mon () {
         ${MON_LABEL}- &>/dev/null
     fi
   done
-  until confd -onetime -backend ${KV_TYPE} -node ${CONFD_NODE_SCHEMA}${KV_IP}:${KV_PORT} ${CONFD_KV_TLS} -prefix="/${CLUSTER_PATH}/" ; do
+  update_ceph_conf
+}
+
+function update_ceph_conf () {
+  CLUSTER_PATH=ceph-config/${CLUSTER}
+  until confd -onetime -backend ${KV_TYPE} -node ${CONFD_NODE_SCHEMA}${KV_IP}:${KV_PORT} ${CONFD_KV_TLS} -prefix="/${CLUSTER_PATH}/" &>/dev/null; do
     echo "Waiting for confd to update templates..."
     sleep 1
   done
@@ -752,8 +757,6 @@ function get_dev_osdid {
   fi
 }
 
-
-
 function get_dev_model {
   if [ -z $1 ]; then
     return 0
@@ -825,8 +828,6 @@ function get_dev_fwrev {
   fi
   return 0
 }
-
-
 
 function get_osd_map {
   MAPPING_COMMAND="/opt/bin/mapping.sh"
@@ -918,6 +919,51 @@ function is_osd_disk() {
   else
     echo "false"
   fi
+}
+
+function check_osd_mon_conn () {
+  if [ -z $1 ]; then
+    log_err "Usage: check_osd_mon_conn OSD_CONTAINER"
+  fi
+  local OSD_ID=$($DOCKER_CMD inspect --format='{{.Config.Labels.OSD_ID}}' $1)
+  local OSD_PID=$(ps -eo pid,cmd | grep "/usr/bin/[c]eph-osd" | grep -w "${OSD_ID}" | awk '{print $1}')
+
+  # check proccess alive, then check port 6789
+  # if container exists but pid doesn't, we should pass it.
+  if ! kill -0 "${OSD_PID}" &>/dev/null; then
+    return 0
+  elif netstat -nap | grep "ESTABLISHED ${OSD_PID}/ceph-osd" | grep -q ":6789"; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+function osd_health_check () {
+  # We check ESTABLISHED MON port 6789 to determine OSD is offline or not.
+  while [ true ]; do
+    local ALL_OSD_CONTAINER=$($DOCKER_CMD ps -q -f LABEL=CEPH=osd)
+    WARN_OSD=""
+    for container in ${ALL_OSD_CONTAINER}; do
+      if ! check_osd_mon_conn ${container}; then
+        WARN_OSD="${WARN_OSD} ${container}"
+      fi
+    done
+
+    if [ -z "${WARN_OSD}" ]; then
+      echo "PASS"
+    else
+      echo "Need check again"
+      sleep 60
+      for warn_osd in ${WARN_OSD}; do
+        if ! check_osd_mon_conn ${warn_osd}; then
+          echo "Restart ${warn_osd}"
+          $DOCKER_CMD restart ${warn_osd}
+        fi
+      done
+    fi
+    sleep 60
+  done
 }
 
 # Find disks not only unmounted but also non-ceph disks
