@@ -503,6 +503,7 @@ function run_osds () {
   start_all_osds
   add_new_osd auto
   auto_change_crush
+  osd_health_check
 }
 
 function start_all_osds () {
@@ -954,7 +955,7 @@ function osd_health_check () {
       echo "PASS"
     else
       echo "Need check again"
-      sleep 60
+      sleep 30
       for warn_osd in ${WARN_OSD}; do
         if ! check_osd_mon_conn ${warn_osd}; then
           echo "Restart ${warn_osd}"
