@@ -22,8 +22,8 @@ function check_config {
 
 # ceph admin key exists or die
 function check_admin_key {
-  if [[ ! -e /etc/ceph/${CLUSTER}.client.admin.keyring ]]; then
-      log "ERROR- /etc/ceph/${CLUSTER}.client.admin.keyring must exist; get it from your existing mon"
+  if [[ ! -e $ADMIN_KEYRING ]]; then
+      log "ERROR- $ADMIN_KEYRING must exist; get it from your existing mon"
       exit 1
   fi
 }
@@ -39,27 +39,58 @@ function prefix_length {
   done
 }
 
-# create socket directory
-function create_socket_dir {
-  mkdir -p /var/run/ceph
-  chown ceph. /var/run/ceph
+# Test if a command line tool is available
+function is_available {
+  command -v $@ &>/dev/null
 }
+
+# create the mandatory directories
+function create_mandatory_directories {
+  # Let's create the bootstrap directories
+  for keyring in $OSD_BOOTSTRAP_KEYRING $MDS_BOOTSTRAP_KEYRING $RGW_BOOTSTRAP_KEYRING; do
+    mkdir -p $(dirname $keyring)
+  done
+
+  # Let's create the ceph directories
+  for directory in mon osd mds radosgw tmp; do
+    mkdir -p /var/lib/ceph/$directory
+  done
+
+  # Make the monitor directory
+  mkdir -p "$MON_DATA_DIR"
+
+  # Create socket directory
+  mkdir -p /var/run/ceph
+
+  # Creating rados directories
+  mkdir -p /var/lib/ceph/radosgw/${RGW_NAME}
+
+  # Create the MDS directory
+  mkdir -p /var/lib/ceph/mds/${CLUSTER}-${MDS_NAME}
+
+  # Adjust the owner of all those directories
+  chown -R ceph. /var/run/ceph/ /var/lib/ceph/*
+}
+
 
 # Calculate proper device names, given a device and partition number
 function dev_part {
-  if [[ -L ${1} ]]; then
+  local osd_device=${1}
+  local osd_partition=${2}
+
+  if [[ -L ${osd_device} ]]; then
     # This device is a symlink. Work out it's actual device
-    local actual_device=$(readlink -f ${1})
-    local bn=$(basename $1)
-    if [[ "${ACTUAL_DEVICE:0-1:1}" == [0-9] ]]; then
-      local desired_partition="${actual_device}p${2}"
+    local actual_device=$(readlink -f ${osd_device})
+    local bn=$(basename ${osd_device})
+    if [[ "${actual_device:0-1:1}" == [0-9] ]]; then
+      local desired_partition="${actual_device}p${osd_partition}"
     else
-      local desired_partition="${actual_device}${2}"
+      local desired_partition="${actual_device}${osd_partition}"
     fi
-    # Now search for a symlink in the directory of $1
+    # Now search for a symlink in the directory of $osd_device
     # that has the correct desired partition, and the longest
     # shared prefix with the original symlink
-    local symdir=$(dirname $1)
+    local symdir=$(dirname ${osd_device})
     local link=""
     local pfxlen=0
     for option in $(ls $symdir); do
@@ -72,23 +103,25 @@ function dev_part {
     fi
     done
     if [[ $pfxlen -eq 0 ]]; then
-      >&2 log "Could not locate appropriate symlink for partition $2 of $1"
+      >&2 log "Could not locate appropriate symlink for partition ${osd_partition} of ${osd_device}"
       exit 1
     fi
     echo "$link"
-  elif [[ "${1:0-1:1}" == [0-9] ]]; then
-    echo "${1}p${2}"
+  elif [[ "${osd_device:0-1:1}" == [0-9] ]]; then
+    echo "${osd_device}p${osd_partition}"
   else
-    echo "${1}${2}"
+    echo "${osd_device}${osd_partition}"
   fi
 }
 
 function osd_trying_to_determine_scenario {
   if [ -z "${OSD_DEVICE}" ]; then
     log "Bootstrapped OSD(s) found; using OSD directory"
+    source osd_directory.sh
     osd_directory
   elif $(parted --script ${OSD_DEVICE} print | egrep -sq '^ 1.*ceph data'); then
     log "Bootstrapped OSD found; activating ${OSD_DEVICE}"
+    source osd_disk_activate.sh
     osd_activate
   else
     log "Device detected, assuming ceph-disk scenario is desired"
@@ -116,4 +149,17 @@ function non_supported_scenario_on_redhat {
       exit 1
     fi
   fi
+}
+
+function is_integer {
+  # This function is about saying if the passed argument is an integer
+  # Supports also negative integers
+  # We use $@ here to consider everything given as parameter and not only the
+  # first one : that's mainly for splited strings like "10 10"
+  [[ $@ =~ ^-?[0-9]+$ ]]
+}
+
+# Transform any set of strings to lowercase
+function to_lowercase {
+  echo "${@,,}"
 }

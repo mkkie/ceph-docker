@@ -1,4 +1,5 @@
 : ${CLUSTER:=ceph}
+: ${CLUSTER_PATH:=ceph-config/${CLUSTER}} # For KV config
 : ${CEPH_CLUSTER_NETWORK:=${CEPH_PUBLIC_NETWORK}}
 : ${CEPH_DAEMON:=${1}} # default daemon to first argument
 : ${CEPH_GET_ADMIN_KEY:=0}
@@ -33,16 +34,40 @@
 : ${RESTAPI_BASE_URL:=/api/v0.1}
 : ${RESTAPI_LOG_LEVEL:=warning}
 : ${RESTAPI_LOG_FILE:=/var/log/ceph/ceph-restapi.log}
-: ${KV_TYPE:=none} # valid options: consul, etcd or none
+: ${KV_TYPE:=none} # valid options: etcd, k8s|kubernetes or none
 : ${KV_IP:=127.0.0.1}
 : ${KV_PORT:=4001} # PORT 8500 for Consul
 : ${GANESHA_OPTIONS:=""}
 : ${GANESHA_EPOCH:=""} # For restarting
 
-if [ ! -z "${KV_CA_CERT}" ]; then
-  KV_TLS="--ca-cert=${KV_CA_CERT} --client-cert=${KV_CLIENT_CERT} --client-key=${KV_CLIENT_KEY}"
-  CONFD_KV_TLS="-scheme=https -client-ca-keys=${KV_CA_CERT} -client-cert=${KV_CLIENT_CERT} -client-key=${KV_CLIENT_KEY}"
-fi
-
 CEPH_OPTS="--cluster ${CLUSTER}"
 MOUNT_OPTS="-t xfs -o noatime,inode64"
+ETCDCTL_OPT="--peers ${KV_IP}:${KV_PORT}"
+
+# make sure etcd uses http or https as a prefix
+if [[ "$KV_TYPE" == "etcd" ]]; then
+  if [ -n "${KV_CA_CERT}" ]; then
+  	CONFD_NODE_SCHEMA="https://"
+    KV_TLS="--ca-file=${KV_CA_CERT} --cert-file=${KV_CLIENT_CERT} --key-file=${KV_CLIENT_KEY}"
+    CONFD_KV_TLS="-scheme=https -client-ca-keys=${KV_CA_CERT} -client-cert=${KV_CLIENT_CERT} -client-key=${KV_CLIENT_KEY}"
+  else
+    CONFD_NODE_SCHEMA="http://"
+  fi
+fi
+
+# Internal variables
+MDS_KEYRING=/var/lib/ceph/mds/${CLUSTER}-${MDS_NAME}/keyring
+ADMIN_KEYRING=/etc/ceph/${CLUSTER}.client.admin.keyring
+MON_KEYRING=/etc/ceph/${CLUSTER}.mon.keyring
+RGW_KEYRING=/var/lib/ceph/radosgw/${RGW_NAME}/keyring
+MDS_BOOTSTRAP_KEYRING=/var/lib/ceph/bootstrap-mds/${CLUSTER}.keyring
+RGW_BOOTSTRAP_KEYRING=/var/lib/ceph/bootstrap-rgw/${CLUSTER}.keyring
+OSD_BOOTSTRAP_KEYRING=/var/lib/ceph/bootstrap-osd/${CLUSTER}.keyring
+OSD_PATH_BASE=/var/lib/ceph/osd/${CLUSTER}
+MONMAP=/etc/ceph/monmap-${CLUSTER}
+
+function get_OSD_path {
+  echo "$OSD_PATH_BASE-$1/"
+}
+
+export LC_ALL=C

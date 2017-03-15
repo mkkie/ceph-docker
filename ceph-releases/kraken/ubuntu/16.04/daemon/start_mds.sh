@@ -4,29 +4,25 @@ set -e
 function start_mds {
   get_config
   check_config
-  create_socket_dir
 
   # Check to see if we are a new MDS
-  if [ ! -e /var/lib/ceph/mds/${CLUSTER}-${MDS_NAME}/keyring ]; then
+  if [ ! -e $MDS_KEYRING ]; then
 
-     mkdir -p /var/lib/ceph/mds/${CLUSTER}-${MDS_NAME}
-     chown ceph. /var/lib/ceph/mds/${CLUSTER}-${MDS_NAME}
-
-    if [ -e /etc/ceph/${CLUSTER}.client.admin.keyring ]; then
-       KEYRING_OPT="--name client.admin --keyring /etc/ceph/${CLUSTER}.client.admin.keyring"
-    elif [ -e /var/lib/ceph/bootstrap-mds/${CLUSTER}.keyring ]; then
-       KEYRING_OPT="--name client.bootstrap-mds --keyring /var/lib/ceph/bootstrap-mds/${CLUSTER}.keyring"
+    if [ -e $ADMIN_KEYRING ]; then
+       KEYRING_OPT="--name client.admin --keyring $ADMIN_KEYRING"
+    elif [ -e $MDS_BOOTSTRAP_KEYRING ]; then
+       KEYRING_OPT="--name client.bootstrap-mds --keyring $MDS_BOOTSTRAP_KEYRING"
     else
-      log "ERROR- Failed to bootstrap MDS: could not find admin or bootstrap-mds keyring.  You can extract it from your current monitor by running 'ceph auth get client.bootstrap-mds -o /var/lib/ceph/bootstrap-mds/${CLUSTER}.keyring'"
+      log "ERROR- Failed to bootstrap MDS: could not find admin or bootstrap-mds keyring.  You can extract it from your current monitor by running 'ceph auth get client.bootstrap-mds -o $MDS_BOOTSTRAP_KEYRING"
       exit 1
     fi
 
     timeout 10 ceph ${CEPH_OPTS} $KEYRING_OPT health || exit 1
 
     # Generate the MDS key
-    ceph ${CEPH_OPTS} $KEYRING_OPT auth get-or-create mds.$MDS_NAME osd 'allow rwx' mds 'allow' mon 'allow profile mds' -o /var/lib/ceph/mds/${CLUSTER}-${MDS_NAME}/keyring
-    chown ceph. /var/lib/ceph/mds/${CLUSTER}-${MDS_NAME}/keyring
-    chmod 600 /var/lib/ceph/mds/${CLUSTER}-${MDS_NAME}/keyring
+    ceph ${CEPH_OPTS} $KEYRING_OPT auth get-or-create mds.$MDS_NAME osd 'allow rwx' mds 'allow' mon 'allow profile mds' -o $MDS_KEYRING
+    chown ceph. $MDS_KEYRING
+    chmod 600 $MDS_KEYRING
 
   fi
 
@@ -41,7 +37,7 @@ function start_mds {
     get_admin_key
     check_admin_key
 
-    if [[ "$(ceph fs ls | grep -c name:.${CEPHFS_NAME},)" -eq "0" ]]; then
+    if [[ "$(ceph fs ls | grep -c name:.${CEPHFS_NAME},)" -eq 0 ]]; then
        # Make sure the specified data pool exists
        if ! ceph ${CEPH_OPTS} osd pool stats ${CEPHFS_DATA_POOL} > /dev/null 2>&1; then
           ceph ${CEPH_OPTS} osd pool create ${CEPHFS_DATA_POOL} ${CEPHFS_DATA_POOL_PG}

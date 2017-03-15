@@ -4,6 +4,20 @@ set -e
 source variables_entrypoint.sh
 source common_functions.sh
 
+if [ -n "$DEBUG" ]; then
+
+  # If the DEBUG env variable is set, let's engage tracing
+  set -x
+
+  # Now let's see if we have some special options
+  case "$(to_lowercase ${DEBUG})" in
+    "stayalive")
+      source docker_exec.sh
+      echo "STAYALIVE: container will not die if a command fails"
+      ;;
+  esac
+fi
+
 ###########################
 # CONFIGURATION GENERATOR #
 ###########################
@@ -11,13 +25,12 @@ source common_functions.sh
 # Load in the bootstrapping routines
 # based on the data store
 case "$KV_TYPE" in
-   etcd|consul)
-      source /config.kv.sh
+   etcd)
+      source /config.kv.etcd.sh
       ;;
    k8s|kubernetes)
       source /config.k8s.sh
       ;;
-
    *)
       source /config.static.sh
       ;;
@@ -29,7 +42,9 @@ esac
 ###############
 
 # Normalize DAEMON to lowercase
-CEPH_DAEMON=$(echo ${CEPH_DAEMON} |tr '[:upper:]' '[:lower:]')
+CEPH_DAEMON=$(to_lowercase ${CEPH_DAEMON})
+
+create_mandatory_directories
 
 # If we are given a valid first argument, set the
 # CEPH_DAEMON variable from it
@@ -109,7 +124,7 @@ case "$CEPH_DAEMON" in
     watch_mon_health
     ;;
   *)
-  if [ ! -n "$CEPH_DAEMON" ]; then
+  if [ -z "$CEPH_DAEMON" ]; then
     log "ERROR- One of CEPH_DAEMON or a daemon parameter must be defined as the name "
     log "of the daemon you want to deploy."
     log "Valid values for CEPH_DAEMON are MON, OSD, OSD_DIRECTORY, OSD_CEPH_DISK, OSD_CEPH_DISK_PREPARE, OSD_CEPH_DISK_ACTIVATE, OSD_CEPH_ACTIVATE_JOURNAL, MDS, RGW, RGW_USER, RESTAPI, ZAP_DEVICE, RBD_MIRROR, NFS"

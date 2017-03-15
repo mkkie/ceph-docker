@@ -4,39 +4,36 @@ set -e
 function start_rgw {
   get_config
   check_config
-  create_socket_dir
 
-  if [ ${CEPH_GET_ADMIN_KEY} -eq "1" ]; then
+  if [ ${CEPH_GET_ADMIN_KEY} -eq 1 ]; then
     get_admin_key
     check_admin_key
   fi
 
   # Check to see if our RGW has been initialized
-  if [ ! -e /var/lib/ceph/radosgw/${RGW_NAME}/keyring ]; then
+  if [ ! -e $RGW_KEYRING ]; then
 
-    mkdir -p /var/lib/ceph/radosgw/${RGW_NAME}
-    chown ceph. /var/lib/ceph/radosgw/${RGW_NAME}
-
-    if [ ! -e /var/lib/ceph/bootstrap-rgw/${CLUSTER}.keyring ]; then
-      log "ERROR- /var/lib/ceph/bootstrap-rgw/${CLUSTER}.keyring must exist. You can extract it from your current monitor by running 'ceph auth get client.bootstrap-rgw -o /var/lib/ceph/bootstrap-rgw/${CLUSTER}.keyring'"
+    if [ ! -e $RGW_BOOTSTRAP_KEYRING ]; then
+      log "ERROR- $RGW_BOOTSTRAP_KEYRING must exist. You can extract it from your current monitor by running 'ceph auth get client.bootstrap-rgw -o $RGW_BOOTSTRAP_KEYRING'"
       exit 1
     fi
 
-    timeout 10 ceph ${CEPH_OPTS} --name client.bootstrap-rgw --keyring /var/lib/ceph/bootstrap-rgw/${CLUSTER}.keyring health || exit 1
+    timeout 10 ceph ${CEPH_OPTS} --name client.bootstrap-rgw --keyring $RGW_BOOTSTRAP_KEYRING health || exit 1
 
     # Generate the RGW key
-    ceph ${CEPH_OPTS} --name client.bootstrap-rgw --keyring /var/lib/ceph/bootstrap-rgw/${CLUSTER}.keyring auth get-or-create client.rgw.${RGW_NAME} osd 'allow rwx' mon 'allow rw' -o /var/lib/ceph/radosgw/${RGW_NAME}/keyring
-    chown ceph. /var/lib/ceph/radosgw/${RGW_NAME}/keyring
-    chmod 0600 /var/lib/ceph/radosgw/${RGW_NAME}/keyring
+    ceph ${CEPH_OPTS} --name client.bootstrap-rgw --keyring $RGW_BOOTSTRAP_KEYRING auth get-or-create client.rgw.${RGW_NAME} osd 'allow rwx' mon 'allow rw' -o $RGW_KEYRING
+    chown ceph. $RGW_KEYRING
+    chmod 0600 $RGW_KEYRING
   fi
 
   log "SUCCESS"
 
+  RGW_FRONTENDS="civetweb port=$RGW_CIVETWEB_PORT"
   if [ "$RGW_REMOTE_CGI" -eq 1 ]; then
-    /usr/bin/radosgw -d ${CEPH_OPTS} -n client.rgw.${RGW_NAME} -k /var/lib/ceph/radosgw/$RGW_NAME/keyring --rgw-socket-path="" --rgw-zonegroup="$RGW_ZONEGROUP" --rgw-zone="$RGW_ZONE" --rgw-frontends="fastcgi socket_port=$RGW_REMOTE_CGI_PORT socket_host=$RGW_REMOTE_CGI_HOST" --setuser ceph --setgroup ceph
-  else
-    /usr/bin/radosgw -d ${CEPH_OPTS} -n client.rgw.${RGW_NAME} -k /var/lib/ceph/radosgw/$RGW_NAME/keyring --rgw-socket-path="" --rgw-zonegroup="$RGW_ZONEGROUP" --rgw-zone="$RGW_ZONE" --rgw-frontends="civetweb port=$RGW_CIVETWEB_PORT" --setuser ceph --setgroup ceph
+    RGW_FRONTENDS="fastcgi socket_port=$RGW_REMOTE_CGI_PORT socket_host=$RGW_REMOTE_CGI_HOST"
   fi
+
+  exec /usr/bin/radosgw -d ${CEPH_OPTS} -n client.rgw.${RGW_NAME} -k $RGW_KEYRING --rgw-socket-path="" --rgw-zonegroup="$RGW_ZONEGROUP" --rgw-zone="$RGW_ZONE" --rgw-frontends="$RGW_FRONTENDS" --setuser ceph --setgroup ceph
 }
 
 function create_rgw_user {
@@ -47,12 +44,12 @@ function create_rgw_user {
     exit 1
   fi
 
-  mkdir -p "/var/lib/ceph/radosgw/${RGW_NAME}"
-  mv /var/lib/ceph/radosgw/keyring /var/lib/ceph/radosgw/${RGW_NAME}/keyring
+  mv /var/lib/ceph/radosgw/keyring $RGW_KEYRING
 
-  if [ -z "${RGW_USER_SECRET_KEY}" ]; then
-    radosgw-admin user create --uid=${RGW_USER} --display-name="RGW ${RGW_USER} User" -c /etc/ceph/${CLUSTER}.conf
-  else
-    radosgw-admin user create --uid=${RGW_USER} --access-key=${RGW_USER_ACCESS_KEY} --secret=${RGW_USER_SECRET_KEY} --display-name="RGW ${RGW_USER} User" -c /etc/ceph/${CLUSTER}.conf
+  USER_KEY=""
+  if [ -n "${RGW_USER_SECRET_KEY}" ]; then
+    USER_KEY="--access-key=${RGW_USER_USER_KEY} --secret=${RGW_USER_SECRET_KEY}"
   fi
+
+  exec radosgw-admin user create --uid=${RGW_USER} ${USER_KEY} --display-name="RGW ${RGW_USER} User" -c /etc/ceph/${CLUSTER}.conf
 }
