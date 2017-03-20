@@ -1,9 +1,11 @@
 #!/bin/bash
 
-command -v docker > /dev/null 2>&1 || { echo "Command not found: docker"; exit 1; }
-DOCKER_CMD=$(command -v docker)
-CEPH_IMG="cdxvirt/ceph-daemon:k8s-1.5"
+: ${CEPH_IMG:="cdxvirt/ceph-daemon:k8s-1.5"}
+if ! DOCKER_CMD=$(command -v docker 2>/dev/null); then
+  echo $(date +"%Y-%m-%d %H:%M:%S.%6N") "docker: command not found."
+  exit 1
+fi
 
 LD_LIBRARY_PATH=/lib:/host/lib ${DOCKER_CMD} run --rm --privileged=true --net=host --pid=host \
 -v /dev/:/dev/ -v /etc/ceph:/etc/ceph -v /lib/modules/:/lib/modules/ \
--e KV_TYPE=etcd -e KV_PORT=2379 ${CEPH_IMG} rbd "$@"
+-e KV_TYPE=etcd -e KV_PORT=2379 ${CEPH_IMG} admin rbd "$@"
