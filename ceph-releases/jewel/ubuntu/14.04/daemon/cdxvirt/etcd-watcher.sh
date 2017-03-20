@@ -6,7 +6,7 @@ if [ -z $1 ]; then
 fi
 
 if [ $1 == "init" ]; then
-  etcdctl exec-watch /ceph-config/ceph/max_osd_num_per_node -- /bin/bash -c '/bin/bash /cdxvirt-etcd-watcher.sh \"$ETCD_WATCH_VALUE\"'
+  etcdctl exec-watch /ceph-config/ceph/max_osd_num_per_node -- /bin/bash -c '/bin/bash /cdxvirt/etcd-watcher.sh \"$ETCD_WATCH_VALUE\"'
 else
   max_osd_num=$ETCD_WATCH_VALUE
   echo "max_osd_num: $max_osd_num"

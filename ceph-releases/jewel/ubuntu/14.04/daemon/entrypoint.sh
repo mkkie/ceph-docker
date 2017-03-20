@@ -1016,7 +1016,7 @@ function watch_mon_health {
 # Normalize DAEMON to lowercase
 CEPH_DAEMON=$(echo ${CEPH_DAEMON} |tr '[:upper:]' '[:lower:]')
 
-source cdxvirt-common.sh
+source cdxvirt/common.sh
 
 # If we are given a valid first argument, set the
 # CEPH_DAEMON variable from it
@@ -1079,24 +1079,24 @@ case "$CEPH_DAEMON" in
     watch_mon_health
     ;;
   osd_controller)
-    source cdxvirt-osd.sh
+    source cdxvirt/osd.sh
     osd_controller
     ;;
   mon_controller)
-    source cdxvirt-mon.sh
+    source cdxvirt/mon.sh
     mon_controller
     ;;
   ceph-api)
-    source cdxvirt-api.sh
+    source cdxvirt/api.sh
     shift
     ceph_api $@
     ;;
   snapshot)
-    source cdxvirt-rbd.sh
+    source cdxvirt/rbd.sh
     rbd_snapshot
     ;;
   export)
-    source cdxvirt-rbd.sh
+    source cdxvirt/rbd.sh
     rbd_export
     ;;
   admin)

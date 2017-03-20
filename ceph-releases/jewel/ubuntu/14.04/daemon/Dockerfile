@@ -14,8 +14,8 @@ ADD ./confd/conf.d/* /etc/confd/conf.d/
 # Add bootstrap script, ceph defaults key/values for KV store
 ADD entrypoint.sh config.*.sh ceph.defaults check_zombie_mons.py remove-mon.sh /
 # Add cdxvirt scripts
-ADD cdxvirt/*.sh cdxvirt/ceph-secrets.yaml.template /
-ADD cdxvirt/ceph-api /usr/bin/ceph-api
+ADD cdxvirt /cdxvirt
+RUN mv /cdxvirt/ceph-api /usr/bin/ceph-api
 
 # Add volumes for Ceph config and data
 VOLUME ["/etc/ceph","/var/lib/ceph", "/etc/ganesha"]

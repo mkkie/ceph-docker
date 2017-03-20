@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source cdxvirt-crush.sh
+source cdxvirt/crush.sh
 
 ###########
 # OSD ENV #
@@ -32,7 +32,7 @@ function osd_controller {
   run_osds
 
   log "Start ETCD watcher."
-  /bin/bash -c "/bin/bash /cdxvirt-etcd-watcher.sh init" &
+  /bin/bash -c "/bin/bash /cdxvirt/etcd-watcher.sh init" &
 
   log "Loop & check hotplug OSDs."
   hotplug_OSD

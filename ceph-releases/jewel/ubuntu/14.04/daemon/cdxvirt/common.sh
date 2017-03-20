@@ -8,7 +8,7 @@ if [ ${DEBUG_MODE} == "true" ]; then
     set -x
 fi
 
-source cdxvirt-etcd.sh
+source cdxvirt/etcd.sh
 if [ ${KV_TYPE} == "etcd" ]; then
     check_KV_IP
 fi
