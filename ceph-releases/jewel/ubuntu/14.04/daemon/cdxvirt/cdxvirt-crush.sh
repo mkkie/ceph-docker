@@ -5,8 +5,6 @@
 ##############
 
 function crush_initialization {
-  CLUSTER_PATH=ceph-config/${CLUSTER}
-
   # DO NOT EDIT DEFAULT POOL
   DEFAULT_POOL=rbd
 

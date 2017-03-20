@@ -20,6 +20,7 @@ function osd_controller_env {
   set_max_osd ${MAX_OSDS} init
 }
 
+
 ##################
 # OSD CONTROLLER #
 ##################
@@ -73,7 +74,7 @@ function start_all_osds {
 
 function activate_osd {
   if [ -z "$1" ]; then
-    log_err "function activate_osd need to assign a OSD."
+    log_err "Function activate_osd need to assign a OSD."
     return 1
   else
     local disk2act=$1
@@ -211,7 +212,7 @@ function select_n_disks {
 
 function prepare_new_osd {
   if [ -z "$1" ]; then
-    log_err "prepare_new_osd need to assign a disk."
+    log_err "Function prepare_new_osd need to assign a disk."
     return 1
   else
     local osd2prep=$1
@@ -357,7 +358,7 @@ function hotplug_OSD {
           run_osds
           ;;
         DELETE)
-          log "Remove ${hotplug_disk}"
+          log "Disk ${hotplug_disk} removed."
           if is_osd_running ${hotplug_disk}; then
             local CONT_ID=$(${DOCKER_CMD} ps -q -f LABEL=CEPH=osd -f LABEL=DEV_NAME=${hotplug_disk})
             ${DOCKER_CMD} stop ${CONT_ID} &>/dev/null || true
