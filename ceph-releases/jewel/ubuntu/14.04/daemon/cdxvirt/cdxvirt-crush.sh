@@ -39,18 +39,8 @@ function crush_initialization {
     # create a crush rule, chooseleaf as osd.
     ceph ${CEPH_OPTS} osd crush rule create-simple replicated_type_osd default osd firstn
 
-    # crush_ruleset 0 for host, 1 for osd
-    case "${DEFAULT_CRUSH_LEAF}" in
-      host)
-        set_crush_ruleset ${DEFAULT_POOL} 0
-        ;;
-      osd)
-        set_crush_ruleset ${DEFAULT_POOL} 1
-        ;;
-      *)
-        log_warn "DEFAULT_CRUSH_LEAF not in [ osd | host ], do nothing"
-        ;;
-    esac
+    # crush_ruleset host, osd
+    set_crush_ruleset ${DEFAULT_POOL} ${DEFAULT_CRUSH_LEAF}
 
     # Replication size of rbd pool
     # check size in the range 1 ~ 9
@@ -137,8 +127,10 @@ function crush_type_space {
     return 0
   elif [ ${NODEs} -eq "1" ]; then
     set_pool_size ${DEFAULT_POOL} 1
+    set_crush_ruleset ${DEFAULT_POOL} osd
   else
     set_pool_size ${DEFAULT_POOL} 2
+    set_crush_ruleset ${DEFAULT_POOL} host
   fi
 
   # multiple = OSDs / 2, pg_num = PGs_PER_OSD x multiple
@@ -149,7 +141,6 @@ function crush_type_space {
   fi
   local PG_NUM=$(expr ${PGs_PER_OSD} '*' ${multiple})
   set_pg_num ${DEFAULT_POOL} ${PG_NUM}
-  auto_change_crush_leaf 2
 }
 
 # auto change pg & crush leaf. Max replications is 3.
@@ -160,8 +151,10 @@ function crush_type_safety {
     return 0
   elif [ ${NODEs} -lt "3" ]; then
     set_pool_size ${DEFAULT_POOL} ${NODEs}
+    set_crush_ruleset ${DEFAULT_POOL} osd
   else
     set_pool_size ${DEFAULT_POOL} 3
+    set_crush_ruleset ${DEFAULT_POOL} host
   fi
 
   # multiple = OSDs / 3, pg_num = PGs_PER_OSD x multiple
@@ -172,23 +165,28 @@ function crush_type_safety {
   fi
   local PG_NUM=$(expr ${PGs_PER_OSD} '*' ${multiple})
   set_pg_num ${DEFAULT_POOL} ${PG_NUM}
-  auto_change_crush_leaf 2
-}
-
-# usage: auto_change_crush_leaf ${MAX_COPIES}
-function auto_change_crush_leaf {
-  # crush_ruleset 0 for host, 1 for osd
-  if [ ${NODEs} -ge $1 ]; then
-    set_crush_ruleset ${DEFAULT_POOL} 0
-  else
-    set_crush_ruleset ${DEFAULT_POOL} 1
-  fi
 }
 
 function set_crush_ruleset {
-  # $1 = pool_name $2 = crush_ruleset
-  log "Set pool \"$1\" crush_ruleset to \"$2\""
-  if ! ceph ${CEPH_OPTS} osd pool set $1 crush_ruleset $2 2>/dev/null; then
+  # $1 = pool_name $2 = crush_ruleset {osd|host}
+  local POOL_NAME=$1
+  local CRUSH_RULE=$2
+  case ${CRUSH_RULE} in
+    host)
+      local CRUSH_RULESET=0
+      ;;
+    osd)
+      local CRUSH_RULESET=1
+      ;;
+    *)
+      log_warn "CRUSH_RULE "$2" not defined."
+      return 0
+      ;;
+  esac
+
+  if ceph ${CEPH_OPTS} osd pool set ${POOL_NAME} crush_ruleset ${CRUSH_RULESET} &>/dev/null; then
+    log "Set pool \"$1\" crush_ruleset to \"${CRUSH_RULE}\""
+  else
     log_warn "Fail to set crush_ruleset of $1 pool"
     return 0
   fi
