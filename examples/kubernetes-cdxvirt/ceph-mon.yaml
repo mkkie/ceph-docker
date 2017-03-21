@@ -47,7 +47,7 @@ spec:
             successThreshold: 1
             exec:
               command:
-              - /mon-liveprobe.sh
+              - /cdxvirt/mon-liveprobe.sh
             timeoutSeconds: 5
           volumeMounts:
             - name: cephconfig

@@ -38,7 +38,6 @@ set -e
 : ${KV_PORT:=4001} # PORT 8500 for Consul
 : ${GANESHA_OPTIONS:=""}
 : ${GANESHA_EPOCH:=""} # For restarting
-: ${DEBUG_MODE:=false}
 
 if [ ! -z "${KV_CA_CERT}" ]; then
   KV_TLS="--ca-cert=${KV_CA_CERT} --client-cert=${KV_CLIENT_CERT} --client-key=${KV_CLIENT_KEY}"
@@ -1010,64 +1009,6 @@ function watch_mon_health {
 }
 
 
-##################
-# OSD_CONTROLLER #
-##################
-
-function osd_controller () {
-  start_config
-  crush_initialization
-  osd_controller_env
-  run_osds
-
-  echo "Start etcd osd watcher"
-  /bin/bash -c "/bin/bash /etcd-watcher.sh init" &
-  hotplug_OSD
-}
-
-
-################
-# RBD_SNAPSHOT #
-################
-
-function rbd_snapshot {
-  start_config
-  log_info "backup snapshot starting..."
-  # rm $cycle ago snapshot
-  [[ "$(rbd snap ls ${rbd_pool}/${rbd_image} | grep ${rbd_image}_$(date --date="$cycle days ago" +%Y%m%d%H) )" = "" ]] || rbd snap rm ${rbd_pool}/${rbd_image}@${rbd_image}_$(date --date="$cycle days ago" +%Y%m%d%H)
-
-  rbd snap create ${rbd_pool}/${rbd_image}@${rbd_image}_$(date +%Y%m%d%H)
-}
-
-
-##############
-# RBD_EXPORT #
-##############
-
-function rbd_export {
-  start_config
-  log_info "export backup to starting..."
-  # rbd export imag and gizp it, then rsync to $rsync
-  rbd export ${rbd_pool}/${rbd_image} - | gzip -9 > /tmp/daily_${rbd_image}_$(date +%Y%m%d).img
-  rsync -av --delete --password-file=/rsync.password /tmp/daily_${rbd_image}_$(date +%Y%m%d).img.gz $rsync
-}
-
-
-###############
-# CEPH_CONFIG #
-###############
-
-function start_config {
-    # if ceph.conf not exist then get it.
-    if [ ! -e /etc/ceph/${CLUSTER}.conf ]; then
-        get_config
-        check_config
-        get_admin_key
-        check_admin_key
-    fi
-}
-
-
 ###############
 # CEPH_DAEMON #
 ###############
@@ -1075,15 +1016,7 @@ function start_config {
 # Normalize DAEMON to lowercase
 CEPH_DAEMON=$(echo ${CEPH_DAEMON} |tr '[:upper:]' '[:lower:]')
 
-if [ ${DEBUG_MODE} == "true" ]; then
-    set -x
-fi
-source /scale.sh
-# FIXME: Read dns ip from env
-echo -e "search ceph.svc.cluster.local svc.cluster.local cluster.local\nnameserver 10.0.0.10\noptions ndots:5" > /etc/resolv.conf
-if [ ${KV_TYPE} == "etcd" ]; then
-    check_KV_IP
-fi
+source cdxvirt/common.sh
 
 # If we are given a valid first argument, set the
 # CEPH_DAEMON variable from it
@@ -1146,20 +1079,35 @@ case "$CEPH_DAEMON" in
     watch_mon_health
     ;;
   osd_controller)
+    source cdxvirt/osd.sh
     osd_controller
     ;;
   mon_controller)
+    source cdxvirt/mon.sh
     mon_controller
     ;;
   ceph-api)
+    source cdxvirt/api.sh
     shift
     ceph_api $@
     ;;
   snapshot)
+    source cdxvirt/rbd.sh
     rbd_snapshot
     ;;
   export)
+    source cdxvirt/rbd.sh
     rbd_export
+    ;;
+  admin)
+    get_ceph_admin
+    shift
+    exec $@
+    ;;
+  user)
+    get_ceph_conf
+    shift
+    exec $@
     ;;
   *)
   if [ ! -n "$CEPH_DAEMON" ]; then
@@ -1169,10 +1117,6 @@ case "$CEPH_DAEMON" in
     log "Valid values for the daemon parameter are mon, osd, osd_directory, osd_ceph_disk, osd_ceph_disk_prepare, osd_ceph_disk_activate, osd_ceph_activate_journal, mds, rgw, rgw_user, restapi, zap_device, rbd_mirror, nfs"
     exit 1
   fi
-
-  # FIXME: Consider secure issue
-  start_config
-  exec $@
   ;;
 esac
 
