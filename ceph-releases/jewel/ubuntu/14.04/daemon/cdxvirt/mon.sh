@@ -1,37 +1,10 @@
 #!/bin/bash
 
-function check_mon {
-  CLUSTER_PATH=ceph-config/${CLUSTER}
-  : ${K8S_IP:=${KV_IP}}
-  : ${K8S_PORT:=8080}
-  : ${MON_RECOVERY_LABEL:="cdxvirt/recovery"}
-  check_single_mon
-}
-
-function check_single_mon {
-  # if MON has single_mon kubernetes label then enter single mode
-  if kubectl get node --show-labels --server=${K8S_IP}:${K8S_PORT} | grep -w "${K8S_IP}" | grep -w "${MON_RECOVERY_LABEL}=true" >/dev/null; then
-    ceph-mon -i ${MON_NAME} --extract-monmap /tmp/monmap
-
-    # remove all monmap list then add itself
-    local MONMAP_LIST=$(monmaptool -p /tmp/monmap | awk '/mon\./ { sub ("mon.", "", $3); print $3}')
-    for del_mon in ${MONMAP_LIST}; do
-      monmaptool --rm $del_mon /tmp/monmap
-    done
-    monmaptool --add ${MON_NAME} ${MON_IP}:6789 /tmp/monmap
-    ceph-mon -i ${MON_NAME} --inject-monmap /tmp/monmap
-    kubectl label node --server=${K8S_IP}:${K8S_PORT} ${K8S_IP} ${MON_RECOVERY_LABEL}-
-    rm /tmp/monmap
-  fi
-}
-
-
 ###########
 # MON ENV #
 ###########
 
 function mon_controller_env {
-  CLUSTER_PATH=ceph-config/${CLUSTER}
   : ${K8S_IP:=https://${KUBERNETES_SERVICE_HOST}}
   : ${K8S_PORT:=${KUBERNETES_SERVICE_PORT}}
   : ${K8S_CERT:="--certificate-authority=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt --token=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)"}
@@ -39,6 +12,67 @@ function mon_controller_env {
   : ${POD_SELECTOR:="ceph-mon"}
   : ${EP_NAME:="ceph-mon"}
   : ${MON_LABEL:="cdxvirt/ceph_mon"}
+}
+
+
+#############
+# MON CHECK #
+#############
+
+function check_mon {
+  : ${K8S_IP:=${KV_IP}}
+  : ${K8S_PORT:=8080}
+  get_mon_network
+  verify_mon_folder
+  verify_monmap
+}
+
+function get_mon_network {
+  if [ -n "${CEPH_PUBLIC_NETWORK}" ] && [ ${KV_TYPE} == "etcd" ]; then
+    MON_IP=$(ip -4 -o a | awk '{ sub ("/..", "", $4); print $4 }' | grepcidr "${CEPH_PUBLIC_NETWORK}" \
+      2>/dev/null) || log_err "No IP match CEPH_PUBLIC_NETWORK."
+  fi
+}
+
+function verify_mon_folder {
+  # Found monitor folder or leave.
+  local MON_FOLDER_NUM=$(ls -d /var/lib/ceph/mon/*/ 2>/dev/null | grep "${CLUSTER}" | wc -w)
+  if [ "${MON_FOLDER_NUM}" -eq 0 ]; then
+    return 0
+  elif [ -d /var/lib/ceph/mon/${CLUSTER}-${MON_NAME} ]; then
+    return 0
+  fi
+
+  if [ "${MON_FOLDER_NUM}" -gt 1 ]; then
+    log_err "More than one ceph monitor folders in /var/lib/ceph/mon/"
+    exit 1
+  else
+    mv $(ls -d /var/lib/ceph/mon/*/) /var/lib/ceph/mon/${CLUSTER}-${MON_NAME}
+    log_success "Renamed monitor folder in /var/lib/ceph/mon."
+  fi
+}
+
+function verify_monmap {
+  if [ ! -d /var/lib/ceph/mon/${CLUSTER}-${MON_NAME} ]; then
+    return 0
+  fi
+
+  ceph-mon -i ${MON_NAME} --cluster ${CLUSTER} --extract-monmap /tmp/monmap &>/dev/null
+  if monmaptool --print /tmp/monmap | grep -w "${MON_IP}" | grep -w -q "${MON_NAME}"; then
+    return 0
+  elif monmaptool --print /tmp/monmap | grep -w -q "mon.${MON_NAME}"; then
+    monmaptool --rm ${MON_NAME} /tmp/monmap &>/dev/null
+    log_success "Replaced MON_IP to ${MON_IP} in monmap"
+  elif monmaptool --print /tmp/monmap | grep -w -q "${MON_IP}"; then
+    local monname_in_monmap=$(monmaptool -p /tmp/monmap | grep -w "${MON_IP}" | \
+      awk '{ sub ("mon.", "", $3); print $3}')
+    monmaptool --rm ${monname_in_monmap} /tmp/monmap &>/dev/null
+    log_success "Replaced MON_NAME to ${MON_NAME} in monmap"
+  else
+    log_success "Add ${MON_NAME} & ${MON_IP} to monmap."
+  fi
+  monmaptool --add ${MON_NAME} ${MON_IP}:6789 /tmp/monmap &>/dev/null
+  ceph-mon -i ${MON_NAME} --cluster ${CLUSTER} --inject-monmap /tmp/monmap &>/dev/null
 }
 
 

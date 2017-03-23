@@ -177,8 +177,8 @@ function kv {
   KEY="$1"
   shift
   VALUE="$*"
-  echo "adding key ${KEY} with value ${VALUE} to KV store"
-  kviator --kvstore=${KV_TYPE} --client=${KV_IP}:${KV_PORT} ${KV_TLS} cas ${CLUSTER_PATH}"${KEY}" "${VALUE}" || echo "value is already set"
+  log "adding key ${KEY} with value ${VALUE} to KV store"
+  kviator --kvstore=${KV_TYPE} --client=${KV_IP}:${KV_PORT} ${KV_TLS} cas ${CLUSTER_PATH}"${KEY}" "${VALUE}" || log "value is already set"
 }
 
 function populate_kv {
@@ -231,9 +231,6 @@ function start_mon {
       elif [ ${NETWORK_AUTO_DETECT} -eq 4 ]; then
         MON_IP=$(ip -4 -o a s $NIC_MORE_TRAFFIC | awk '{ sub ("/..", "", $4); print $4 }')
         CEPH_PUBLIC_NETWORK=$(ip r | grep -o '[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}/[0-9]\{1,2\}' | head -1)
-      elif [ ${NETWORK_AUTO_DETECT} -eq 5 ]; then
-        MON_IP=$(ip -4 -o a | awk '{ sub ("/..", "", $4); print $4 }' | grepcidr "${CEPH_PUBLIC_NETWORK}" \
-          2>/dev/null) || log_err "No IP can match CEPH_PUBLIC_NETWORK."
       elif [ ${NETWORK_AUTO_DETECT} -eq 6 ]; then
         MON_IP=$(ip -6 -o a s $NIC_MORE_TRAFFIC | awk '{ sub ("/..", "", $4); print $4 }')
         CEPH_PUBLIC_NETWORK=$(ip r | grep -o '[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}/[0-9]\{1,2\}' | head -1)
@@ -252,10 +249,6 @@ function start_mon {
     log "ERROR- it looks like we have not been able to discover the network settings"
     exit 1
   fi
-  
-  # FIXME: need to check mon?
-  # Check monmap version & single mode
-  # check_mon
 
   # If we don't have a monitor keyring, this is a new monitor
   if [ ! -e /var/lib/ceph/mon/${CLUSTER}-${MON_NAME}/keyring ]; then
@@ -290,9 +283,6 @@ function start_mon {
 
     # Clean up the temporary key
     rm /tmp/${CLUSTER}.mon.keyring
-  # FIXME: Should we add this?
-  #else
-  #  ceph-mon -i ${MON_NAME} --inject-monmap /etc/ceph/monmap-${CLUSTER}
   fi
 
   log "SUCCESS"
@@ -1028,6 +1018,8 @@ case "$CEPH_DAEMON" in
     start_mds
     ;;
   mon)
+    source cdxvirt/mon.sh
+    check_mon
     start_mon
     ;;
   osd)
