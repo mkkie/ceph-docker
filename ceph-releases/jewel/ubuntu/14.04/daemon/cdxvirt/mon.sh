@@ -23,14 +23,26 @@ function check_mon {
   : ${K8S_IP:=${KV_IP}}
   : ${K8S_PORT:=8080}
   get_mon_network
-  verify_mon_folder
-  verify_monmap
+  if [ ${KV_TYPE} == "etcd" ]; then
+    remove_lock
+    verify_mon_folder
+    update_monmap
+    update_etcd_monmap&
+  fi
 }
 
 function get_mon_network {
   if [ -n "${CEPH_PUBLIC_NETWORK}" ] && [ ${KV_TYPE} == "etcd" ]; then
     MON_IP=$(ip -4 -o a | awk '{ sub ("/..", "", $4); print $4 }' | grepcidr "${CEPH_PUBLIC_NETWORK}" \
       2>/dev/null) || log_err "No IP match CEPH_PUBLIC_NETWORK."
+  fi
+}
+
+function remove_lock {
+  if local LOCKER_NAME=$(etcdctl -C ${KV_IP}:${KV_PORT} get ${CLUSTER_PATH}/lock 2>/dev/null) && \
+    [[ ${LOCKER_NAME} == ${MON_NAME} ]]; then
+    etcdctl -C ${KV_IP}:${KV_PORT} rm ${CLUSTER_PATH}/lock &>/dev/null
+    log_warn "Removed the previous lock key \"${MON_NAME}\""
   fi
 }
 
@@ -48,31 +60,45 @@ function verify_mon_folder {
     exit 1
   else
     mv $(ls -d /var/lib/ceph/mon/*/) /var/lib/ceph/mon/${CLUSTER}-${MON_NAME}
-    log_success "Renamed monitor folder in /var/lib/ceph/mon."
+    log_success "Renamed the folder of monitor data to ${CLUSTER}-${MON_NAME}"
   fi
 }
 
-function verify_monmap {
+function update_monmap {
   if [ ! -d /var/lib/ceph/mon/${CLUSTER}-${MON_NAME} ]; then
     return 0
   fi
 
-  ceph-mon -i ${MON_NAME} --cluster ${CLUSTER} --extract-monmap /tmp/monmap &>/dev/null
-  if monmaptool --print /tmp/monmap | grep -w "${MON_IP}" | grep -w -q "${MON_NAME}"; then
-    return 0
-  elif monmaptool --print /tmp/monmap | grep -w -q "mon.${MON_NAME}"; then
-    monmaptool --rm ${MON_NAME} /tmp/monmap &>/dev/null
-    log_success "Replaced MON_IP to ${MON_IP} in monmap"
-  elif monmaptool --print /tmp/monmap | grep -w -q "${MON_IP}"; then
-    local monname_in_monmap=$(monmaptool -p /tmp/monmap | grep -w "${MON_IP}" | \
-      awk '{ sub ("mon.", "", $3); print $3}')
-    monmaptool --rm ${monname_in_monmap} /tmp/monmap &>/dev/null
-    log_success "Replaced MON_NAME to ${MON_NAME} in monmap"
+  if etcdctl -C ${KV_IP}:${KV_PORT} get ${CLUSTER_PATH}/monmap | uudecode -o /tmp/monmap; then
+    log_success "Got the monmap from ETCD."
   else
-    log_success "Add ${MON_NAME} & ${MON_IP} to monmap."
+    log_err "Failed to get latest monmap from ETCD."
+    return 0
   fi
-  monmaptool --add ${MON_NAME} ${MON_IP}:6789 /tmp/monmap &>/dev/null
-  ceph-mon -i ${MON_NAME} --cluster ${CLUSTER} --inject-monmap /tmp/monmap &>/dev/null
+
+  if ceph-mon -i ${MON_NAME} --cluster ${CLUSTER} --inject-monmap /tmp/monmap &>/dev/null; then
+    log_success "Updated monmap in monitor folder."
+  else
+    log_err "Failed to inject monmap in monitor folder."
+  fi
+}
+
+function update_etcd_monmap {
+  until ps 1 | grep -q ceph-mon; do
+    sleep 5
+  done
+  sleep 30
+  if timeout 10 ceph ${CEPH_OPTS} mon getmap -o /tmp/monmap; then
+    log_success "Got the latest monmap."
+  else
+    log_err "Failed to get latest monmap. Please check Ceph status."
+    return 0
+  fi
+  if uuencode /tmp/monmap - | etcdctl -C ${KV_IP}:${KV_PORT} set ${CLUSTER_PATH}/monmap &>/dev/null; then
+    log_success "Updated monmap on ETCD."
+  else
+    log_err "Failed to update monmap on ETCD."
+  fi
 }
 
 
