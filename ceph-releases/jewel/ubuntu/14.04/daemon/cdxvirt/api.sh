@@ -11,9 +11,8 @@ function ceph_api {
       check_docker_cmd
       $@
       ;;
-    set_max_mon|get_max_mon|remove_mon)
-      source cdxvirt/mon.sh
-      mon_controller_env
+    set_max_mon|get_max_mon|ceph_status|fix_monitor)
+      source cdxvirt/ceph-controller.sh
       $@
       ;;
     get_osd_map)

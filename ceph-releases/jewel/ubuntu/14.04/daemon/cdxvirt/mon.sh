@@ -27,7 +27,7 @@ function check_mon {
     remove_lock
     verify_mon_folder
     update_monmap
-    update_etcd_monmap&
+    update_etcd_monmap boot&
   fi
 }
 
@@ -84,9 +84,11 @@ function update_monmap {
 }
 
 function update_etcd_monmap {
-  until ps 1 | grep -q ceph-mon; do
-    sleep 5
-  done
+  if [ "$1" == "boot" ]; then
+    until ps 1 | grep -q ceph-mon; do
+      sleep 5
+    done
+  fi
   sleep 30
   if timeout 10 ceph ${CEPH_OPTS} mon getmap -o /tmp/monmap; then
     log_success "Got the latest monmap."
@@ -225,6 +227,35 @@ function mon_name_2_mon_ip {
     exit 1
   fi
   etcdctl -C ${KV_IP}:${KV_PORT} get ${CLUSTER_PATH}/mon_host/$1 2>/dev/null | sed 's/:6789//'
+}
+
+
+###########
+# MON API #
+###########
+
+function remove_monitor {
+  if [ -z $1 ]; then
+    log_err "Usage: remove_monitor MON_name"
+    exit 1
+  else
+    MON_2_REMOVE=$1
+  fi
+  get_ceph_admin
+
+  if ceph mon remove "${MON_2_REMOVE}" 2>>/tmp/ceph_mon_remove_err; then
+    log_success "${MON_2_REMOVE} has been removed."
+    get_ceph_admin force &>/dev/null &
+  else
+    log_err "Failes to remove ${MON_2_REMOVE}"
+    cat /tmp/ceph_mon_remove_err
+    exit 1
+  fi
+
+  if [ ${KV_TYPE} == "etcd" ]; then
+    etcdctl -C ${KV_IP}:${KV_PORT} rm ${CLUSTER_PATH}/mon_host/${MON_2_REMOVE} &>/dev/null || true
+    update_etcd_monmap &>/dev/null &
+  fi
 }
 
 function remove_mon {
