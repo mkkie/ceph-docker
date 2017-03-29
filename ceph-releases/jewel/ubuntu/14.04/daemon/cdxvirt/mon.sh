@@ -241,11 +241,11 @@ function remove_monitor {
   else
     MON_2_REMOVE=$1
   fi
-  get_ceph_admin
+  get_ceph_admin &>/dev/null
 
   if ceph mon remove "${MON_2_REMOVE}" 2>>/tmp/ceph_mon_remove_err; then
     log_success "${MON_2_REMOVE} has been removed."
-    get_ceph_admin force &>/dev/null &
+    get_ceph_admin force &>/dev/null
   else
     log_err "Failes to remove ${MON_2_REMOVE}"
     cat /tmp/ceph_mon_remove_err
