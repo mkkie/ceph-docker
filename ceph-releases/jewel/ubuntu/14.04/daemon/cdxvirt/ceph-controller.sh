@@ -43,6 +43,11 @@ function ceph_status {
   esac
 }
 
+
+################
+# MON RECOVERY #
+################
+
 function fix_monitor {
   get_ceph_status
   if [ -z "${MON_DOWN_LIST}" ]; then

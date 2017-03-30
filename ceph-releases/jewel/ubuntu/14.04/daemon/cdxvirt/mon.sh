@@ -144,26 +144,19 @@ function mon_controller_main {
   current_mons=$(echo ${nodes_have_mon_label} | wc -w)
   if [ ${current_mons} -lt "${MAX_MONS}" ]; then
     local mon_num2add=$(expr ${MAX_MONS} - ${current_mons})
-  elif [ ${current_mons} -gt "${MAX_MONS}" ]; then
-    local mon_num2add="-1"
   else
     local mon_num2add=0
   fi
 
   # create kubernetes mon label
   local counter=0
-  if [ ${mon_num2add} == "-1" ]; then
-    auto_remove_mon
-  else
-    local counter=0
-    for mon2add in ${nodes_no_mon_label}; do
-      if [ "${counter}" -lt ${mon_num2add} ]; then
-        kubectl label node --server=${K8S_IP}:${K8S_PORT} ${K8S_CERT} ${mon2add} \
-          ${MON_LABEL}=true --overwrite &>/dev/null && log_success "Add Mon node \"${mon2add}\""
-        let counter=counter+1
-      fi
-    done
-  fi
+  for mon2add in ${nodes_no_mon_label}; do
+    if [ "${counter}" -lt ${mon_num2add} ]; then
+      kubectl label node --server=${K8S_IP}:${K8S_PORT} ${K8S_CERT} ${mon2add} \
+        ${MON_LABEL}=true --overwrite &>/dev/null && log_success "Add Mon node \"${mon2add}\""
+      let counter=counter+1
+    fi
+  done
 
   # update endpoints
   if kubectl get ep ${EP_NAME} --server=${K8S_IP}:${K8S_PORT} ${K8S_CERT} --namespace=${NAMESPACE} &>/dev/null; then
@@ -241,7 +234,7 @@ function remove_monitor {
   else
     MON_2_REMOVE=$1
   fi
-  get_ceph_admin &>/dev/null
+  get_ceph_admin force &>/dev/null
 
   if ceph mon remove "${MON_2_REMOVE}" 2>>/tmp/ceph_mon_remove_err; then
     log_success "${MON_2_REMOVE} has been removed."
@@ -255,50 +248,6 @@ function remove_monitor {
   if [ ${KV_TYPE} == "etcd" ]; then
     etcdctl -C ${KV_IP}:${KV_PORT} rm ${CLUSTER_PATH}/mon_host/${MON_2_REMOVE} &>/dev/null || true
     update_etcd_monmap &>/dev/null &
-  fi
-}
-
-function remove_mon {
-  if [ -z $1 ]; then
-    log_err "Usage: remove_mon MON_name"
-    exit 1
-  fi
-  get_ceph_admin
-  get_mon_nodes
-  if [ $(echo ${etcd_mon_host} | wc -w) -le $(get_max_mon) ]; then
-    log_warn "Running Mon pods equals MAX_MONS. Do nothing."
-    return 0
-  fi
-  for mon_node in ${nodes_have_mon_label}; do
-    local mon_name=$(node_ip_2_hostname ${mon_node})
-    if [ "$1" == "${mon_name}" ]; then
-      etcdctl -C ${KV_IP}:${KV_PORT} rm ${CLUSTER_PATH}/mon_host/${mon_name} &>/dev/null || true
-      kubectl label node --server=${K8S_IP}:${K8S_PORT} ${K8S_CERT} ${mon_node} \
-        ${MON_LABEL}- &>/dev/null
-      ceph mon remove "${mon_name}" || true
-    fi
-  done
-  until confd -onetime -backend ${KV_TYPE} -node ${CONFD_NODE_SCHEMA}${KV_IP}:${KV_PORT} ${CONFD_KV_TLS} -prefix="/${CLUSTER_PATH}/" ; do
-    echo "Waiting for confd to update templates..."
-    sleep 1
-  done
-}
-
-function auto_remove_mon {
-  get_ceph_admin
-
-  # get the last mon quorum index
-  local mon_count=$(ceph quorum_status | jq .quorum | sed '1d;$d' | wc -w)
-  local mon_quorum_json_index=$(expr ${mon_count} - 1)
-  local mon_name2remove=$(ceph quorum_status | jq .quorum_names[${mon_quorum_json_index}] | tr -d "\"")
-  if [ -z ${mon_name2remove} ]; then
-    log_err "Monitor name not found"
-    return 0
-  elif [ "${mon_count}" -le 2 ]; then
-    log_warn "Monitor number is too low. (Only \"${mon_count}\" monitor)"
-    return 0
-  else
-    remove_mon ${mon_name2remove}
   fi
 }
 
