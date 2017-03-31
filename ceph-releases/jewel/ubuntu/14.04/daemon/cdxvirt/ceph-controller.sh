@@ -60,3 +60,32 @@ function fix_monitor {
     remove_monitor ${mon}
   done
 }
+
+function set_max_mon {
+  if [ $# -eq "2" ] && [ $2 == "init" ]; then
+    local max_mon_num=$1
+    etcdctl -C ${KV_IP}:${KV_PORT} mk ${CLUSTER_PATH}/max_mons ${max_mon_num} &>/dev/null || true
+    return 0
+  elif [ -z "$1" ]; then
+    log_err "Usage: set_max_mon 1~5+"
+    exit 1
+  else
+    local max_mon_num=$1
+  fi
+  if etcdctl -C ${KV_IP}:${KV_PORT} set ${CLUSTER_PATH}/max_mons ${max_mon_num}; then
+    log_success "Expect MON number is \"$1\"."
+  else
+    log_err "Fail to set \$MAX_MONS"
+    return 1
+  fi
+}
+
+function get_max_mon {
+  local MAX_MONS=""
+  if MAX_MONS=$(etcdctl -C ${KV_IP}:${KV_PORT} get ${CLUSTER_PATH}/max_mons); then
+    echo "${MAX_MONS}"
+  else
+    log_err "Fail to get \$MAX_MONS"
+    return 1
+  fi
+}
