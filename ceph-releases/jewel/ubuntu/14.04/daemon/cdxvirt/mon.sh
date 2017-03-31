@@ -1,37 +1,10 @@
 #!/bin/bash
 
-function check_mon {
-  CLUSTER_PATH=ceph-config/${CLUSTER}
-  : ${K8S_IP:=${KV_IP}}
-  : ${K8S_PORT:=8080}
-  : ${MON_RECOVERY_LABEL:="cdxvirt/recovery"}
-  check_single_mon
-}
-
-function check_single_mon {
-  # if MON has single_mon kubernetes label then enter single mode
-  if kubectl get node --show-labels --server=${K8S_IP}:${K8S_PORT} | grep -w "${K8S_IP}" | grep -w "${MON_RECOVERY_LABEL}=true" >/dev/null; then
-    ceph-mon -i ${MON_NAME} --extract-monmap /tmp/monmap
-
-    # remove all monmap list then add itself
-    local MONMAP_LIST=$(monmaptool -p /tmp/monmap | awk '/mon\./ { sub ("mon.", "", $3); print $3}')
-    for del_mon in ${MONMAP_LIST}; do
-      monmaptool --rm $del_mon /tmp/monmap
-    done
-    monmaptool --add ${MON_NAME} ${MON_IP}:6789 /tmp/monmap
-    ceph-mon -i ${MON_NAME} --inject-monmap /tmp/monmap
-    kubectl label node --server=${K8S_IP}:${K8S_PORT} ${K8S_IP} ${MON_RECOVERY_LABEL}-
-    rm /tmp/monmap
-  fi
-}
-
-
 ###########
 # MON ENV #
 ###########
 
 function mon_controller_env {
-  CLUSTER_PATH=ceph-config/${CLUSTER}
   : ${K8S_IP:=https://${KUBERNETES_SERVICE_HOST}}
   : ${K8S_PORT:=${KUBERNETES_SERVICE_PORT}}
   : ${K8S_CERT:="--certificate-authority=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt --token=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)"}
@@ -39,6 +12,95 @@ function mon_controller_env {
   : ${POD_SELECTOR:="ceph-mon"}
   : ${EP_NAME:="ceph-mon"}
   : ${MON_LABEL:="cdxvirt/ceph_mon"}
+}
+
+
+#############
+# MON CHECK #
+#############
+
+function check_mon {
+  : ${K8S_IP:=${KV_IP}}
+  : ${K8S_PORT:=8080}
+  get_mon_network
+  if [ ${KV_TYPE} == "etcd" ]; then
+    remove_lock
+    verify_mon_folder
+    update_monmap
+    update_etcd_monmap boot&
+  fi
+}
+
+function get_mon_network {
+  if [ -n "${CEPH_PUBLIC_NETWORK}" ] && [ ${KV_TYPE} == "etcd" ]; then
+    MON_IP=$(ip -4 -o a | awk '{ sub ("/..", "", $4); print $4 }' | grepcidr "${CEPH_PUBLIC_NETWORK}" \
+      2>/dev/null) || log_err "No IP match CEPH_PUBLIC_NETWORK."
+  fi
+}
+
+function remove_lock {
+  if local LOCKER_NAME=$(etcdctl -C ${KV_IP}:${KV_PORT} get ${CLUSTER_PATH}/lock 2>/dev/null) && \
+    [[ ${LOCKER_NAME} == ${MON_NAME} ]]; then
+    etcdctl -C ${KV_IP}:${KV_PORT} rm ${CLUSTER_PATH}/lock &>/dev/null
+    log_warn "Removed the previous lock key \"${MON_NAME}\""
+  fi
+}
+
+function verify_mon_folder {
+  # Found monitor folder or leave.
+  local MON_FOLDER_NUM=$(ls -d /var/lib/ceph/mon/*/ 2>/dev/null | grep "${CLUSTER}" | wc -w)
+  if [ "${MON_FOLDER_NUM}" -eq 0 ]; then
+    return 0
+  elif [ -d /var/lib/ceph/mon/${CLUSTER}-${MON_NAME} ]; then
+    return 0
+  fi
+
+  if [ "${MON_FOLDER_NUM}" -gt 1 ]; then
+    log_err "More than one ceph monitor folders in /var/lib/ceph/mon/"
+    exit 1
+  else
+    mv $(ls -d /var/lib/ceph/mon/*/) /var/lib/ceph/mon/${CLUSTER}-${MON_NAME}
+    log_success "Renamed the folder of monitor data to ${CLUSTER}-${MON_NAME}"
+  fi
+}
+
+function update_monmap {
+  if [ ! -d /var/lib/ceph/mon/${CLUSTER}-${MON_NAME} ]; then
+    return 0
+  fi
+
+  if etcdctl -C ${KV_IP}:${KV_PORT} get ${CLUSTER_PATH}/monmap | uudecode -o /tmp/monmap; then
+    log_success "Got the monmap from ETCD."
+  else
+    log_err "Failed to get latest monmap from ETCD."
+    return 0
+  fi
+
+  if ceph-mon -i ${MON_NAME} --cluster ${CLUSTER} --inject-monmap /tmp/monmap &>/dev/null; then
+    log_success "Updated monmap in monitor folder."
+  else
+    log_err "Failed to inject monmap in monitor folder."
+  fi
+}
+
+function update_etcd_monmap {
+  if [ "$1" == "boot" ]; then
+    until ps 1 | grep -q ceph-mon; do
+      sleep 5
+    done
+  fi
+  sleep 30
+  if timeout 10 ceph ${CEPH_OPTS} mon getmap -o /tmp/monmap; then
+    log_success "Got the latest monmap."
+  else
+    log_err "Failed to get latest monmap. Please check Ceph status."
+    return 0
+  fi
+  if uuencode /tmp/monmap - | etcdctl -C ${KV_IP}:${KV_PORT} set ${CLUSTER_PATH}/monmap &>/dev/null; then
+    log_success "Updated monmap on ETCD."
+  else
+    log_err "Failed to update monmap on ETCD."
+  fi
 }
 
 
@@ -82,26 +144,19 @@ function mon_controller_main {
   current_mons=$(echo ${nodes_have_mon_label} | wc -w)
   if [ ${current_mons} -lt "${MAX_MONS}" ]; then
     local mon_num2add=$(expr ${MAX_MONS} - ${current_mons})
-  elif [ ${current_mons} -gt "${MAX_MONS}" ]; then
-    local mon_num2add="-1"
   else
     local mon_num2add=0
   fi
 
   # create kubernetes mon label
   local counter=0
-  if [ ${mon_num2add} == "-1" ]; then
-    auto_remove_mon
-  else
-    local counter=0
-    for mon2add in ${nodes_no_mon_label}; do
-      if [ "${counter}" -lt ${mon_num2add} ]; then
-        kubectl label node --server=${K8S_IP}:${K8S_PORT} ${K8S_CERT} ${mon2add} \
-          ${MON_LABEL}=true --overwrite &>/dev/null && log_success "Add Mon node \"${mon2add}\""
-        let counter=counter+1
-      fi
-    done
-  fi
+  for mon2add in ${nodes_no_mon_label}; do
+    if [ "${counter}" -lt ${mon_num2add} ]; then
+      kubectl label node --server=${K8S_IP}:${K8S_PORT} ${K8S_CERT} ${mon2add} \
+        ${MON_LABEL}=true --overwrite &>/dev/null && log_success "Add Mon node \"${mon2add}\""
+      let counter=counter+1
+    fi
+  done
 
   # update endpoints
   if kubectl get ep ${EP_NAME} --server=${K8S_IP}:${K8S_PORT} ${K8S_CERT} --namespace=${NAMESPACE} &>/dev/null; then
@@ -167,47 +222,32 @@ function mon_name_2_mon_ip {
   etcdctl -C ${KV_IP}:${KV_PORT} get ${CLUSTER_PATH}/mon_host/$1 2>/dev/null | sed 's/:6789//'
 }
 
-function remove_mon {
+
+###########
+# MON API #
+###########
+
+function remove_monitor {
   if [ -z $1 ]; then
-    log_err "Usage: remove_mon MON_name"
+    log_err "Usage: remove_monitor MON_name"
+    exit 1
+  else
+    MON_2_REMOVE=$1
+  fi
+  get_ceph_admin force &>/dev/null
+
+  if ceph mon remove "${MON_2_REMOVE}" 2>>/tmp/ceph_mon_remove_err; then
+    log_success "${MON_2_REMOVE} has been removed."
+    get_ceph_admin force &>/dev/null
+  else
+    log_err "Failes to remove ${MON_2_REMOVE}"
+    cat /tmp/ceph_mon_remove_err
     exit 1
   fi
-  get_ceph_admin
-  get_mon_nodes
-  if [ $(echo ${etcd_mon_host} | wc -w) -le $(get_max_mon) ]; then
-    log_warn "Running Mon pods equals MAX_MONS. Do nothing."
-    return 0
-  fi
-  for mon_node in ${nodes_have_mon_label}; do
-    local mon_name=$(node_ip_2_hostname ${mon_node})
-    if [ "$1" == "${mon_name}" ]; then
-      etcdctl -C ${KV_IP}:${KV_PORT} rm ${CLUSTER_PATH}/mon_host/${mon_name} &>/dev/null || true
-      kubectl label node --server=${K8S_IP}:${K8S_PORT} ${K8S_CERT} ${mon_node} \
-        ${MON_LABEL}- &>/dev/null
-      ceph mon remove "${mon_name}" || true
-    fi
-  done
-  until confd -onetime -backend ${KV_TYPE} -node ${CONFD_NODE_SCHEMA}${KV_IP}:${KV_PORT} ${CONFD_KV_TLS} -prefix="/${CLUSTER_PATH}/" ; do
-    echo "Waiting for confd to update templates..."
-    sleep 1
-  done
-}
 
-function auto_remove_mon {
-  get_ceph_admin
-
-  # get the last mon quorum index
-  local mon_count=$(ceph quorum_status | jq .quorum | sed '1d;$d' | wc -w)
-  local mon_quorum_json_index=$(expr ${mon_count} - 1)
-  local mon_name2remove=$(ceph quorum_status | jq .quorum_names[${mon_quorum_json_index}] | tr -d "\"")
-  if [ -z ${mon_name2remove} ]; then
-    log_err "Monitor name not found"
-    return 0
-  elif [ "${mon_count}" -le 2 ]; then
-    log_warn "Monitor number is too low. (Only \"${mon_count}\" monitor)"
-    return 0
-  else
-    remove_mon ${mon_name2remove}
+  if [ ${KV_TYPE} == "etcd" ]; then
+    etcdctl -C ${KV_IP}:${KV_PORT} rm ${CLUSTER_PATH}/mon_host/${MON_2_REMOVE} &>/dev/null || true
+    update_etcd_monmap &>/dev/null &
   fi
 }
 

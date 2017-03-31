@@ -47,7 +47,7 @@ function log_warn { log "$1" "WARN" "${LOG_WARN_COLOR}"; }
 ##############
 
 function check_docker_cmd {
-  if ! DOCKER_CMD=$(command -v docker 2>/dev/null); then
+  if ! DOCKER_CMD=$(which docker); then
     log_err "docker: command not found."
     exit 1
   elif ! ${DOCKER_CMD} -v | grep -wq "version"; then
@@ -79,7 +79,7 @@ function docker {
 
 function get_ceph_admin {
   # if ceph.conf not exist then get it.
-  if [ ! -e /etc/ceph/${CLUSTER}.conf ]; then
+  if [ ! -e /etc/ceph/${CLUSTER}.conf ] || [ "$1" == "force" ]; then
     get_config
     check_config
     get_admin_key
@@ -89,7 +89,7 @@ function get_ceph_admin {
 }
 
 function get_ceph_conf {
-  if [ ! -e /etc/ceph/${CLUSTER}.conf ]; then
+  if [ ! -e /etc/ceph/${CLUSTER}.conf ] || [ "$1" == "force" ]; then
     get_config
     check_config
   fi
