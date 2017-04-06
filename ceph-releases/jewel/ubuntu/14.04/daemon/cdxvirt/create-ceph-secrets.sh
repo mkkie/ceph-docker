@@ -38,7 +38,7 @@ USAGE="Usage: -n [ceph_namespace] -l [ceph-mon-label] -s [secret_namespace] -f [
   if [ ! -z ${POD} ]; then
     KEY=$($KUBECTL exec --namespace=${NAMESPACE} ${POD} ceph auth print-key ${CEPH_USER} | base64)
 
-    sed "s/\$SECRET_NAMESPACE/${SECRET_NAMESPACE}/g" ceph-secrets.yaml.template | sed "s/\$KEY/${KEY}/g" > ${OUTPUT}
+    sed "s/\$SECRET_NAMESPACE/${SECRET_NAMESPACE}/g" /cdxvirt/ceph-secrets.yaml.template | sed "s/\$KEY/${KEY}/g" > ${OUTPUT}
     echo "Generate ${OUTPUT} done"
     ${KUBECTL} create --namespace=${SECRET_NAMESPACE} -f ${OUTPUT}
 
