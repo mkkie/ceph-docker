@@ -34,6 +34,7 @@ spec:
       containers:
         - name: ceph-osd-pod
           image: cdxvirt/ceph-daemon:latest
+          imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
           args: ["osd_controller"]

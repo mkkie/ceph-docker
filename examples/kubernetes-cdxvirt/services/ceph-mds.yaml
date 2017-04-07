@@ -19,6 +19,7 @@ spec:
       containers:
         - name: ceph-fs-pod
           image: cdxvirt/ceph-daemon:latest
+          imagePullPolicy: IfNotPresent
           args: ["mds"]
           env:
             - name: "CEPHFS_CREATE"
