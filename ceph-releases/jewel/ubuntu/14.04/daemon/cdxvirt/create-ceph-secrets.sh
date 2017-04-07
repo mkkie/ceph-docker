@@ -12,7 +12,8 @@ set -e
 : ${CEPH_USER:="client.admin"}
 : ${RBD_KEY_NAME:="ceph-secret"}
 : ${CEPH_DASH_KEY_NAME:="dashboard-secrets"}
-: ${CEPH_MON_DOMAN_NAME:="false"}
+: ${CEPH_MON_DOMAIN_NAME:="false"}
+: ${CEPH_EP_NAME:=ceph-mon.${CEPH_NAMESPACE}}
 
 #########
 # USAGE #
@@ -29,6 +30,7 @@ function show_usage {
   echo "secret_type      [default: ${SECRET_TYPE}]"
 }
 
+
 ###############
 # GET OPTIONS #
 ###############
@@ -41,7 +43,7 @@ while getopts "n:l:s:t:hdD" OPTION; do
     t) SECRET_TYPE="$OPTARG" ;;
     h) show_usage; exit 0 ;;
     d) set -x ;;
-    D) CEPH_MON_DOMAN_NAME="true" ;;
+    D) CEPH_MON_DOMAIN_NAME="true" ;;
   esac
 done
 
@@ -52,6 +54,7 @@ function show_env {
   echo "secret_type: ${SECRET_TYPE}"
   echo ""
 }
+
 
 ###########
 # RBD KEY #
@@ -67,6 +70,7 @@ function create_rbd_key {
   --from-literal=key=${KEY}
 }
 
+
 ##################
 # CEPH DASHBOARD #
 ##################
@@ -77,14 +81,15 @@ function create_ceph_dash_key {
     ${KUBECTL} delete secret ${CEPH_DASH_KEY_NAME} --namespace=${CEPH_NAMESPACE}
   fi
   $KUBECTL exec --namespace=${CEPH_NAMESPACE} ${POD} ceph auth get ${CEPH_USER} 2>/dev/null > keyring
-  if [ "${CEPH_MON_DOMAN_NAME}" == "true" ]; then
-    echo -e "[global]\nmon host = ${POD_LABLE}.${CEPH_NAMESPACE}" > ceph.conf
+  if [ "${CEPH_MON_DOMAIN_NAME}" == "true" ]; then
+    echo -e "[global]\nmon host = ${CEPH_EP_NAME}" > ceph.conf
   else
     $KUBECTL exec --namespace=${CEPH_NAMESPACE} ${POD} cat /etc/ceph/ceph.conf > ceph.conf
   fi
   ${KUBECTL} create secret generic ${CEPH_DASH_KEY_NAME} --namespace=${CEPH_NAMESPACE} --from-file=keyring --from-file=ceph.conf
   rm keyring ceph.conf
 }
+
 
 ########
 # MAIN #
@@ -109,5 +114,3 @@ case $SECRET_TYPE in
   *)
     show_usage; exit 1;;
 esac
-
-#${KUBECTL} create secret generic --type=kubernetes.io/rbd --namespace=${SECRET_NAMESPACE}
