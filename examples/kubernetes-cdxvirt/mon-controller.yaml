@@ -16,6 +16,7 @@ spec:
       containers:
         - name: mon-controller-pod
           image: cdxvirt/ceph-daemon:latest
+          imagePullPolicy: IfNotPresent
           args: ["mon_controller"]
           env:
             - name: "CEPH_PUBLIC_NETWORK"
