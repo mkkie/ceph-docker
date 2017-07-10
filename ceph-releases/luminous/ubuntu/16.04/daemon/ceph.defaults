@@ -10,7 +10,7 @@
 /global/max_open_files 131072
 
 #osd
-/osd/osd_journal_size 100
+/osd/osd_journal_size 2048
 
 # these 2 should be passed at runtime to the container.
 #/osd/cluster_network 198.100.128.0/19
