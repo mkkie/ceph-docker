@@ -153,6 +153,9 @@ case "$CEPH_DAEMON" in
     # TAG: demo
     source demo.sh
     ;;
+  cdx_osd)
+    source cdx/osd.sh
+    ;;
   bash)
     shift
     exec_own_command $@
