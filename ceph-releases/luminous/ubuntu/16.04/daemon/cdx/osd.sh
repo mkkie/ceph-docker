@@ -5,6 +5,7 @@ DISKS_STATUS_DIR="/disks-status"
 
 function get_avail_disks {
   BLOCKS=$(readlink /sys/class/block/* -e | grep -v "usb" | grep -o "sd[a-z]$")
+  : ${OSD_PATH_BASE:="/var/lib/ceph/osd/ceph"}
   [[ -n "${BLOCKS}" ]] || ( echo "" ; return 1 )
 
   while read disk ; do
