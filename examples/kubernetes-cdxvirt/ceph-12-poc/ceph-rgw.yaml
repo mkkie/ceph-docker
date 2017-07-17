@@ -20,7 +20,7 @@ spec:
             path: /etc/localtime
       containers:
         - name: ceph-rgw-pod
-          image: cdxvirt/ceph-daemon:ceph-l
+          image: cdxvirt/ceph-daemon:cdxvirt-luminous
           args: ["rgw"]
           env:
             - name: "CDX_ENV"

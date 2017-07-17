@@ -20,7 +20,7 @@ spec:
             path: /etc/localtime
       containers:
         - name: ceph-mds-pod
-          image: cdxvirt/ceph-daemon:ceph-l
+          image: cdxvirt/ceph-daemon:cdxvirt-luminous
           args: ["mds"]
           env:
             - name: "CDX_ENV"

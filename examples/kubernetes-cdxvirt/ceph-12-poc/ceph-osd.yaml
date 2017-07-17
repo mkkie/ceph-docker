@@ -26,7 +26,7 @@ spec:
             path: /dev/
       containers:
         - name: ceph-osd-pod
-          image: cdxvirt/ceph-daemon:ceph-l
+          image: cdxvirt/ceph-daemon:cdxvirt-luminous
           securityContext:
             privileged: true
           args: ["cdx_osd"]
