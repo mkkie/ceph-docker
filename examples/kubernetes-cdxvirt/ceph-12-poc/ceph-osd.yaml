@@ -26,12 +26,12 @@ spec:
             path: /dev/
       containers:
         - name: ceph-osd-pod
-          image: cdxvirt/ceph-daemon:latest
+          image: cdxvirt/ceph-daemon:ceph-l
           securityContext:
             privileged: true
           args: ["cdx_osd"]
           env:
-            - name: "MAX_OSDS"
+            - name: "MAX_OSD"
               value: "3"
             - name: "CDX_ENV"
               value: "true"

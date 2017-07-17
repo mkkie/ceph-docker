@@ -94,10 +94,17 @@ function cdx_prepare_disk {
     fi
   done
 
-  for disk in ${prepare_osd_list}; do
-    ceph-disk -v zap /dev/${disk}
-    ceph-disk -v prepare --bluestore /dev/${disk}
-  done
+  if [[ ${OSD_BLUESTORE} -eq 1 ]]; then
+    for disk in ${prepare_osd_list}; do
+      ceph-disk -v zap /dev/${disk}
+      ceph-disk -v prepare --bluestore /dev/${disk}
+    done
+  else
+    for disk in ${prepare_osd_list}; do
+      ceph-disk -v zap /dev/${disk}
+      ceph-disk -v prepare --filestore /dev/${disk}
+    done
+  fi
 }
 
 function cdx_run_osd {
@@ -119,7 +126,7 @@ if is_cdx_env; then
   mkdir -p ${DISKS_STATUS_DIR}
   while true; do
     cdx_disks_status
-    cdx_prepare_disk ${MAX_OSDS}
+    cdx_prepare_disk ${MAX_OSD}
     sleep 2
   done &
   while true; do

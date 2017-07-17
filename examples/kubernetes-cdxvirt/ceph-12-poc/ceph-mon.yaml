@@ -18,7 +18,6 @@ spec:
         - name: cephconfig
           hostPath:
             path: /var/lib/ceph
-      volumes:
         - name: cephlog
           hostPath:
             path: /var/log/ceph
@@ -27,7 +26,7 @@ spec:
             path: /etc/localtime
       containers:
         - name: ceph-mon-pod
-          image: cdxvirt/ceph-daemon:latest
+          image: cdxvirt/ceph-daemon:ceph-l
           args: ["mon"]
           env:
             - name: "CEPH_PUBLIC_NETWORK"
@@ -39,7 +38,6 @@ spec:
           volumeMounts:
             - name: cephconfig
               mountPath: /var/lib/ceph
-          volumeMounts:
             - name: cephlog
               mountPath: /var/log/ceph
             - name: localtime

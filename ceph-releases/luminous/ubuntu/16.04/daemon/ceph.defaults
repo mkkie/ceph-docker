@@ -8,6 +8,9 @@
 
 # auth
 /global/max_open_files 131072
+/global/osd_pool_default_size 1
+/global/osd_pool_default_pg_num 16
+/global/osd_pool_default_pgp_num 16
 
 #osd
 /osd/osd_journal_size 2048

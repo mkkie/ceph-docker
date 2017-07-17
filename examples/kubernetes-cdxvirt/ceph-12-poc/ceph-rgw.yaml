@@ -1,40 +1,30 @@
 apiVersion: extensions/v1beta1
 kind: DaemonSet
 metadata:
-  name: ceph-mgr
+  name: ceph-rgw
   labels:
-    name: ceph-mgr
+    name: ceph-rgw
   namespace: ceph
 spec:
   template:
     metadata:
       labels:
-        name: ceph-mgr
+        name: ceph-rgw
     spec:
       hostNetwork: true
       nodeSelector:
-        cdx/ceph-mgr: "true"
+        cdx/ceph-rgw: "true"
       volumes:
-        - name: cephlog
-          hostPath:
-            path: /var/log/ceph
         - name: localtime
           hostPath:
             path: /etc/localtime
-        - name: dev
-          hostPath:
-            path: /dev/
       containers:
-        - name: ceph-mgr-pod
+        - name: ceph-rgw-pod
           image: cdxvirt/ceph-daemon:ceph-l
-          args: ["mgr"]
+          args: ["rgw"]
           env:
             - name: "CDX_ENV"
               value: "true"
           volumeMounts:
-            - name: cephlog
-              mountPath: /var/log/ceph
             - name: localtime
               mountPath: /etc/localtime
-            - name: dev
-              mountPath: /dev/
