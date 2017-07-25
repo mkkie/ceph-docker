@@ -11,9 +11,14 @@
 /global/osd_pool_default_size 1
 /global/osd_pool_default_pg_num 16
 /global/osd_pool_default_pgp_num 16
+/global/osd_crush_chooseleaf_type 0
 
 #osd
 /osd/osd_journal_size 2048
+
+#client
+#layerring 1, exclusive-lock 4
+/client/rbd_default_features 5
 
 # these 2 should be passed at runtime to the container.
 #/osd/cluster_network 198.100.128.0/19

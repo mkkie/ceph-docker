@@ -19,7 +19,7 @@ ADD https://bin.equinox.io/c/ekMN3bCZFUn/forego-stable-linux-amd64.tgz /forego.t
 ARG PACKAGES="ceph-mon ceph-osd ceph-mds ceph-mgr ceph-base ceph-common radosgw rbd-mirror sharutils etcd s3cmd"
 
 # cdxvirt packages
-ARG CDXVIRT_PKG="grepcidr vim"
+ARG CDXVIRT_PKG="grepcidr vim kmod"
 
 # install prerequisites
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y wget unzip uuid-runtime python-setuptools udev dmsetup && \
