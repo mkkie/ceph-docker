@@ -1,3 +1,0 @@
-#! /bin/bash
-
-DEBUG_MODE=false /entrypoint.sh ceph-api $@

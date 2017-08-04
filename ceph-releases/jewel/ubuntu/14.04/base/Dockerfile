@@ -8,54 +8,49 @@ MAINTAINER Sébastien Han "seb@redhat.com"
 ENV ETCDCTL_VERSION v2.2.4
 ENV ETCDCTL_ARCH linux-amd64
 ENV CEPH_VERSION jewel
-ENV KVIATOR_VERSION 0.0.7
 ENV CONFD_VERSION 0.10.0
-ENV KUBECTL_VERSION v1.4.0
-
-# Download kviator
-ADD https://github.com/AcalephStorage/kviator/releases/download/v${KVIATOR_VERSION}/kviator-${KVIATOR_VERSION}-linux-amd64.zip /kviator.zip
+ENV KUBECTL_VERSION v1.6.0
 
 # Download confd
 ADD https://github.com/kelseyhightower/confd/releases/download/v${CONFD_VERSION}/confd-${CONFD_VERSION}-linux-amd64 /usr/local/bin/confd
 
-# Download forego
-ADD https://bin.equinox.io/c/ekMN3bCZFUn/forego-stable-linux-amd64.tgz /forego.tgz
+# Packages list
+ARG PACKAGES="ceph radosgw rbd-mirror"
+
+# cdxvirt packages
+ARG CDXVIRT_PKG="curl rsync pciutils grep grepcidr inotify-tools hdparm mdadm lvm2"
 
 # install prerequisites
-RUN DEBIAN_FRONTEND=noninteractive apt-get update &&  apt-get install -y wget unzip uuid-runtime python-setuptools udev sharutils curl rsync pciutils grep grepcidr inotify-tools hdparm 
-
-# Install lvm and mdadm for raid
-RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends mdadm lvm2 && \
+RUN DEBIAN_FRONTEND=noninteractive apt-get update &&  apt-get install -y wget unzip uuid-runtime python-setuptools udev sharutils && \
+\
+# install packages for cdxvirt
+    apt-get install -y $CDXVIRT_PKG && \
 \
 # install ceph and ganesha
-    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 3FE869A9 && \
-    echo "deb http://ppa.launchpad.net/gluster/libntirpc/ubuntu trusty main" | tee /etc/apt/sources.list.d/libntirpc.list && \
     wget -q -O- 'https://download.ceph.com/keys/release.asc' | apt-key add - && \
     echo "deb http://download.ceph.com/debian-$CEPH_VERSION/ trusty main" | tee /etc/apt/sources.list.d/ceph-$CEPH_VERSION.list && \
-    apt-get update && apt-get install -y --force-yes ceph radosgw rbd-mirror && \
+    apt-get update && apt-get install -y --force-yes $PACKAGES && \
+    dpkg -s $PACKAGES && \
     apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* && \
 \
 # Install etcdctl
     wget -q -O- "https://github.com/coreos/etcd/releases/download/${ETCDCTL_VERSION}/etcd-${ETCDCTL_VERSION}-${ETCDCTL_ARCH}.tar.gz" |tar xfz - -C/tmp/ etcd-${ETCDCTL_VERSION}-${ETCDCTL_ARCH}/etcdctl && \
     mv /tmp/etcd-${ETCDCTL_VERSION}-${ETCDCTL_ARCH}/etcdctl /usr/local/bin/etcdctl && \
 \
-# Install kviator
-    cd /usr/local/bin && unzip /kviator.zip && chmod +x /usr/local/bin/kviator && rm /kviator.zip && \
-\
 # Install confd
     chmod +x /usr/local/bin/confd && mkdir -p /etc/confd/conf.d && mkdir -p /etc/confd/templates && \
 \
 # Install forego
+    wget -O /forego.tgz 'https://bin.equinox.io/c/ekMN3bCZFUn/forego-stable-linux-amd64.tgz' && \
     cd /usr/local/bin && tar xfz /forego.tgz && chmod +x /usr/local/bin/forego && rm /forego.tgz
 
 # Install kubectl
 ADD https://storage.googleapis.com/kubernetes-release/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl /usr/local/bin/kubectl
 RUN chmod +x /usr/local/bin/kubectl
 
+# install jq & upgrade mdadm for cdxvirt
 ADD https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64 /usr/local/bin/jq
 RUN chmod +x /usr/local/bin/jq
-
-# Upgrade mdadm to 3.3
 ADD http://mirrors.kernel.org/ubuntu/pool/main/m/mdadm/mdadm_3.3-2ubuntu7_amd64.deb /tmp/mdadm.deb
 RUN dpkg -i /tmp/mdadm.deb
 

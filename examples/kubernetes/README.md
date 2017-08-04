@@ -8,7 +8,8 @@ This example does not survive Kubernetes cluster restart! The Monitors need pers
 
 ## Client Requirements
 
-In addition to kubectl, Sigil is required for template handling and must be installed in your system PATH. Instructions can be found here: <https://github.com/gliderlabs/sigil>
+In addition to `kubectl`, `jinja2` or `sigil` is required for template handling and must be installed in your system PATH. Instructions can be found here
+for `jinja2` <https://github.com/mattrobenolt/jinja2-cli> or here for `sigil` <https://github.com/gliderlabs/sigil>.
 
 ## Cluster Requirements
 
@@ -30,7 +31,7 @@ search <EXISTING_DOMAIN>
 
 search svc.cluster.local #Your kubernetes cluster ip domain
 
-nameserver 10.0.0.10     #The cluster IP of skyDNS
+nameserver 10.96.0.10     #The cluster IP of skyDNS
 nameserver <EXISTING_RESOLVER_IP>
 ```
 
@@ -80,14 +81,14 @@ We will be working on making this setup more agnostic, especially in regards to 
 
 ### Override the default network settings
 
-By default, `10.244.0.0/16` is used for the `cluster_network` and `public_network` in ceph.conf. To change these defaults, set the following environment variables according to your network requirements. These IPs should be set according to the range of your Pod IPs in your kubernetes cluster:
+By default, `10.244.0.0/16` (flannel) is used for the `cluster_network` and `public_network` in ceph.conf. To change these defaults, set the following environment variables according to your network requirements. These IPs should be set according to the range of your Pod IPs in your kubernetes cluster:
 
 ```
 export osd_cluster_network=192.168.0.0/16
 export osd_public_network=192.168.0.0/16
 ```
 
-These will be picked up by sigil when generating the kubernetes secrets in the next section.
+These will be picked up by jinja2 or sigil when generating the kubernetes secrets in the next section.
 
 ### Generate keys and configuration
 
@@ -169,12 +170,65 @@ ceph-osd-ieio7         1/1       Running   2          2m
 ceph-osd-j1gyd         1/1       Running   2          2m
 ```
 
+### Creating RBD Storage Class
+
+First, create a RBD provisioner pod:
+
+```
+$ kubectl create -f https://raw.githubusercontent.com/kubernetes-incubator/external-storage/master/ceph/rbd/deployment.yaml --namespace=ceph
+```
+Then, if there is no Ceph admin secret with type `kubernetes.io/rbd`, create one:
+
+```
+$ kubectl create secret generic ceph-secret-admin --from-file=generator/ceph-client-key --type=kubernetes.io/rbd --namespace=ceph
+```
+
+Create a RBD storage class using the following `rbd-class.yaml`:
+
+```yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+   name: slow
+provisioner: ceph.com/rbd
+parameters:
+    monitors: ceph-mon.ceph.svc.cluster.local:6789
+    adminId: admin
+    adminSecretName: ceph-secret-admin
+    adminSecretNamespace: "ceph"
+```
+
+Now, try create a claim:
+```
+$ kubectl create -f https://raw.githubusercontent.com/kubernetes/examples/master/staging/persistent-volume-provisioning/claim1.json
+```
+
+If everything works, expect something like the following:
+
+```
+$ kubectl describe pvc claim1
+Name:           claim1
+Namespace:      default
+StorageClass:
+Status:         Bound
+Volume:         pvc-a9247186-6e59-11e7-b7b6-00259003b6e8
+Labels:         <none>
+Capacity:       3Gi
+Access Modes:   RWO
+Events:
+  FirstSeen     LastSeen        Count   From                                                                                    SubObjectPath   Type            Reason                  Message
+  ---------     --------        -----   ----                                                                                    -------------   --------        ------                  -------
+  6m            6m              2       {persistentvolume-controller }                                                                 Normal           ExternalProvisioning    cannot find provisioner "ceph.com/rbd", expecting that a volume for the claim is provisioned either manually or via external software
+  6m            6m              1       {ceph.com/rbd rbd-provisioner-217120805-9dc84 57e293c8-6e59-11e7-a834-ca4351e8550d }           Normal           Provisioning            External provisioner is provisioning volume for claim "default/claim1"
+  6m            6m              1       {ceph.com/rbd rbd-provisioner-217120805-9dc84 57e293c8-6e59-11e7-a834-ca4351e8550d }           Normal           ProvisioningSucceeded   Successfully provisioned volume pvc-a9247186-6e59-11e7-b7b6-00259003b6e8
+```
+
 ### Mounting CephFS in a pod
 
 First you must add the admin client key to your current namespace (or the namespace of your pod).
 
 ```
-kubectl create secret generic ceph-client-key --from-file=./generator/ceph-client-key
+kubectl create secret generic ceph-client-key --type="kubernetes.io/rbd" --from-file=./generator/ceph-client-key
 ```
 
 Now, if skyDNS is set as a resolver for your host nodes then execute the below command as is. Otherwise modify the `ceph-mon.ceph` host to match the IP address of one of your ceph-mon pods.
@@ -222,7 +276,7 @@ By default `emptyDir` is used for everything. If you have durable storage on you
 
 #### Enabling Jewel RBD features
 
-We disable new RBD features by default since most operating systems cannot mount volumes using these features. You can override this by setting the following before running sigil or the convenience scripts.
+We disable new RBD features by default since most operating systems cannot mount volumes using these features. You can override this by setting the following before running jinja2/sigil or the convenience scripts.
 
 ```
 export client_rbd_default_features=61
