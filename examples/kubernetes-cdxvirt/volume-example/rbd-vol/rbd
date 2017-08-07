@@ -6,6 +6,6 @@ if ! DOCKER_CMD=$(command -v docker 2>/dev/null); then
   exit 1
 fi
 
-LD_LIBRARY_PATH=/lib:/host/lib ${DOCKER_CMD} run --rm --privileged=true --net=host --pid=host \
+LD_LIBRARY_PATH=/lib:/host/lib "${DOCKER_CMD}" run --rm --privileged=true --net=host --pid=host \
 -v /dev/:/dev/ -v /etc/ceph:/etc/ceph -v /lib/modules/:/lib/modules/ \
--e KV_TYPE=etcd -e KV_PORT=2379 ${CEPH_IMG} admin rbd "$@"
+-e CDX_ENV=true -e KV_TYPE=etcd -e KV_PORT=2379 "${CEPH_IMG}" admin rbd "$@"

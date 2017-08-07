@@ -30,7 +30,7 @@ set -e
 : ${RESTAPI_LOG_FILE:=/var/log/ceph/ceph-restapi.log}
 : ${KV_TYPE:=none} # valid options: consul, etcd or none
 : ${KV_IP:=127.0.0.1}
-: ${KV_PORT:=4001} # PORT 8500 for Consul
+: ${KV_PORT:=2379} # PORT 8500 for Consul
 
 if [ ! -z "${KV_CA_CERT}" ]; then
 	KV_TLS="--ca-cert=${KV_CA_CERT} --client-cert=${KV_CLIENT_CERT} --client-key=${KV_CLIENT_KEY}"
@@ -190,7 +190,7 @@ function osd_directory {
     exit 1
   fi
 
-  for OSD_ID in $(ls /var/lib/ceph/osd |  awk 'BEGIN { FS = "-" } ; { print $2 }'); do
+  for OSD_ID in $(ls /var/lib/ceph/osd | sed 's/.*-//'); do
     if [ -n "${JOURNAL_DIR}" ]; then
        OSD_J="${JOURNAL_DIR}/journal.${OSD_ID}"
     else
@@ -346,7 +346,7 @@ function start_mds {
     get_admin_key
     check_admin_key
 
-    if [[ "$(ceph fs ls | grep -c name:.${CEPHFS_NAME},)" -eq "0" ]]; then
+    if [[ "$(ceph ${CEPH_OPTS} fs ls | grep -c name:.${CEPHFS_NAME},)" -eq "0" ]]; then
        # Make sure the specified data pool exists
        if ! ceph ${CEPH_OPTS} osd pool stats ${CEPHFS_DATA_POOL} > /dev/null 2>&1; then
           ceph ${CEPH_OPTS} osd pool create ${CEPHFS_DATA_POOL} ${CEPHFS_DATA_POOL_PG}

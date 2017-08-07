@@ -4,7 +4,8 @@ This Guide will take you through the process of deploying a Ceph cluster on to a
 
 ## Client Requirements
 
-In addition to `kubectl`, Sigil is required for template handling and must be installed in your system `PATH`. Instructions can be found here: <https://github.com/gliderlabs/sigil>
+In addition to `kubectl`, `jinja2` or `sigil` is required for template handling and must be installed in your system PATH. Instructions can be found here
+for `jinja2` <https://github.com/mattrobenolt/jinja2-cli> (install the optional yaml support as well) or here for `sigil` <https://github.com/gliderlabs/sigil>.
 
 ## Cluster Requirements
 
@@ -95,7 +96,7 @@ worker6      us-west1-a  n1-standard-2               10.240.0.26  104.196.245.24
 worker7      us-west1-a  n1-standard-2               10.240.0.27  104.198.14.100   RUNNING
 worker8      us-west1-a  n1-standard-2               10.240.0.28  104.196.224.87   RUNNING
 worker9      us-west1-a  n1-standard-2               10.240.0.29  104.198.7.157    RUNNING
-08:08:44 ifont@ifont scripts ±|scripts ✗|→ kubectl get nodes
+→ kubectl get nodes
 NAME      STATUS    AGE
 worker0   Ready     39m
 worker1   Ready     38m
@@ -120,11 +121,23 @@ cd ceph-docker/examples/kubernetes
 
 ### Override default settings
 
-These will be picked up by `sigil` when generating the Kubernetes secrets in the next section.
+These will be picked up by `jinja2` or `sigil` when generating the Kubernetes secrets in the next section.
 
 #### Override the default network settings
 
 By default, `10.244.0.0/16` is used for the `cluster_network` and `public_network` in the generated ceph.conf. To change these defaults, set the following environment variables according to your cluster CIDR network requirements. These IPs should be set according to the range of your Pod IPs in your Kubernetes cluster as set by the `--cluster-cidr=10.200.0.0/16` option to `kube-controller-manager` on your controller nodes:
+
+##### for jinja2
+
+using your text editor of choice open: generator/templates/ceph/ceph.conf.jinja
+
+under the [osd] heading, change the cluster_network and public_network:
+```
+cluster_network = {{ osd_cluster_network|default('10.200.0.0/16') }}
+public_network = {{ osd_public_network|default('10.200.0.0/16') }}
+```
+
+##### for sigil
 
 ```
 → CLUSTER_NETWORK=10.200.0.0/16
@@ -140,6 +153,18 @@ osd_public_network=10.200.0.0/16
 By default, 128 is used for the `osd_pool_default_pg_num` and `osd_pool_default_pgp_num` in the generated ceph.conf. That's because the recommended number of placement groups per pool for less than 5 OSDs is 128. This means that we would need to increase the number of OSDs to maintain a healthy placement group to OSD ratio (300) when using a default pool replication size of 3 set by `osd_pool_default_size`. However, we have a default limit of 24 virtual CPUs provided by the Google Cloud Platform without requesting an increase in CPU quota. Therefore, we will have to reduce the default number of placement groups in order to achieve a Ceph cluster `HEALTH_OK` status using the same number of OSDs to stay within our CPU quota limit. This is okay for demonstration purposes but is not recommended for production. See [http://docs.ceph.com/docs/master/rados/operations/placement-groups/](http://docs.ceph.com/docs/master/rados/operations/placement-groups/) for more information.
 
 Let's go ahead and reduce the default number of placement groups from 128 down to 32:
+
+##### for jinja2
+
+using your text editor of choice open: generator/templates/ceph/ceph.conf.jinja
+
+under the #auth heading, change the osd_pool_default_pg_num and osd_pool_default_pgp_num:
+```
+osd_pool_default_pg_num = {{ global_osd_pool_default_pg_num|default("32") }}
+osd_pool_default_pgp_num = {{ global_osd_pool_default_pgp_num|default("32") }}
+```
+
+##### for sigil
 
 ```
 export global_osd_pool_default_pg_num=32

@@ -1,21 +1,28 @@
-# DOCKER-VERSION 1.0.0
-#
-# Ceph Daemon
-#
-# VERSION 0.0.1
+# CEPH DAEMON IMAGE
+# CEPH VERSION: Jewel
+# CEPH VERSION DETAIL: 10.2.x
 
-FROM cdxvirt/ceph-base:base-10.2.6-1
+FROM cdxvirt/ceph-base:base-10.2.9-1
 MAINTAINER Sébastien Han "seb@redhat.com"
+
+# Add bootstrap script, ceph defaults key/values for KV store
+ADD *.sh ceph.defaults check_zombie_mons.py ./osd_scenarios/* entrypoint.sh.in /
+
+# Add bootstrap script, ceph defaults key/values for KV store
+ADD *.sh ceph.defaults check_zombie_mons.py ./osd_scenarios/* entrypoint.sh.in disabled_scenario /
+
+# Modify the entrypoint
+RUN bash "/generate_entrypoint.sh" && \
+  rm -f /generate_entrypoint.sh && \
+  bash -n /*.sh
 
 # Add templates for confd
 ADD ./confd/templates/* /etc/confd/templates/
 ADD ./confd/conf.d/* /etc/confd/conf.d/
 
-# Add bootstrap script, ceph defaults key/values for KV store
-ADD entrypoint.sh config.*.sh ceph.defaults check_zombie_mons.py remove-mon.sh /
 # Add cdxvirt scripts
-ADD cdxvirt /cdxvirt
-RUN mv /cdxvirt/ceph-api /usr/bin/ceph-api
+ADD cdx /cdx
+RUN mv /cdx/ceph-api /usr/local/bin/ceph-api
 
 # Add volumes for Ceph config and data
 VOLUME ["/etc/ceph","/var/lib/ceph", "/etc/ganesha"]
