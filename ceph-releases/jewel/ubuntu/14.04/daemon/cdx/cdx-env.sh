@@ -42,6 +42,14 @@
 : "${CEPH_DOMAIN_NAME:=${K8S_EP_NAME}.${K8S_NAMESPACE}}"
 : "${MON_LABEL:="cdx/ceph-mon"}"
 
+# verify
+: "${RBD_VFY_POOL:=rbd}"
+: "${RBD_VFY_IMAGE:=rbd-vfy-image}"
+: "${RBD_MNT_PATH:=/tmp/rbd-vfy}"
+: "${VFY_TEST_FILE:=vfy-test-file}"
+: "${CEPHFS_MNT_PATH:=/tmp/cephfs}"
+: "${CEPHFS_VFY_FS:=cephfs}"
+
 function check_k8s_env {
   if [ -n "${KUBERNETES_SERVICE_HOST}" ]; then
     K8S_CERT=(--server=https://${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT} \

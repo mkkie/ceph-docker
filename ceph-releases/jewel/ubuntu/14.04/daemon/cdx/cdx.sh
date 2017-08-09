@@ -28,6 +28,10 @@ function cdx_entrypoint {
       shift
       exec $@
       ;;
+    verify)
+      source cdx/verify.sh
+      cdx_verify
+      ;;
   esac
 }
 
