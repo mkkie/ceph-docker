@@ -18,7 +18,7 @@ ADD https://github.com/kelseyhightower/confd/releases/download/v${CONFD_VERSION}
 ARG PACKAGES="ceph radosgw rbd-mirror"
 
 # cdxvirt packages
-ARG CDXVIRT_PKG="curl rsync pciutils grep grepcidr inotify-tools hdparm mdadm lvm2"
+ARG CDXVIRT_PKG="curl rsync pciutils grep grepcidr inotify-tools hdparm mdadm lvm2 s3cmd"
 
 # install prerequisites
 RUN DEBIAN_FRONTEND=noninteractive apt-get update &&  apt-get install -y wget unzip uuid-runtime python-setuptools udev sharutils && \
