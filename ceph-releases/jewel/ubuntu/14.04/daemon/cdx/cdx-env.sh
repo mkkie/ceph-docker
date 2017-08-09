@@ -49,6 +49,14 @@
 : "${VFY_TEST_FILE:=vfy-test-file}"
 : "${CEPHFS_MNT_PATH:=/tmp/cephfs}"
 : "${CEPHFS_VFY_FS:=cephfs}"
+: "${RGW_VFY_UID:=vfy-rgw}"
+: "${RGW_VFY_KEY:=vfyrgwkey}"
+: "${RGW_VFY_BUCKET:=RGWVFY}"
+: "${RGW_VFY_PORT:=${RGW_CIVETWEB_PORT}}"
+
+# keep empty for default
+# HTTP_VFY_PATH=http://192.168.0.3/iso/file
+# RGW_VFY_SITE=http://192.168.0.4
 
 function check_k8s_env {
   if [ -n "${KUBERNETES_SERVICE_HOST}" ]; then

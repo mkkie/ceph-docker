@@ -16,7 +16,7 @@ function vlog_normal {
 function get_verify_options {
   VFY_LIST=""
   if echo "${CEPH_VFY}" | grep -qw "all"; then
-    VFY_LIST="rbd rbd_clean rgw mds mds_clean"
+    VFY_LIST="rbd rbd_clean rgw rgw_clean mds mds_clean"
     return 0
   fi
 
@@ -25,7 +25,7 @@ function get_verify_options {
   fi
 
   if echo "${CEPH_VFY}" | grep -qw "rgw"; then
-    VFY_LIST="${VFY_LIST} rgw"
+    VFY_LIST="${VFY_LIST} rgw rgw_clean"
   fi
 
   if echo "${CEPH_VFY}" | grep -qw "mds"; then
@@ -172,6 +172,81 @@ function vfy_rbd_clean {
 
 function vfy_rgw {
   vlog_normal "RGW VERIFY"
+  # check s3cmd config sample
+  if [ ! -e /cdx/s3cfg ]; then
+    vlog_red "/cdx/s3cfg is missing."
+    return 0
+  else
+    cp /cdx/s3cfg /root/.s3cfg
+  fi
+  # check rgw root pool & create account for verifing.
+  if ! rados "${CLI_OPTS[@]}" lspools | grep -q ".rgw.root"; then
+    vlog_red "RGW pool .rgw.root not found."
+    return 0
+  elif ! radosgw-admin "${CLI_OPTS[@]}" user create --uid="${RGW_VFY_UID}" --display-name="${RGW_VFY_UID}-fullname" \
+    --access-key="${RGW_VFY_KEY}" --secret-key="${RGW_VFY_KEY}" &>/dev/null; then
+    vlog_red "Failed to create rgw account uid:${RGW_VFY_UID} key:${RGW_VFY_KEY}"
+    return 0
+  fi
+  # get RGW website IP & check connection
+  if [ -z "${RGW_VFY_SITE}" ]; then
+    RGW_VFY_SITE=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" get pod -o wide | awk '/ceph-rgw-/ {print $7}')
+  fi
+  if [ -z "${RGW_VFY_SITE}" ]; then
+    vlog_red "Please assign \$RGW_VFY_SITE"
+    return 0
+  elif ! curl -s "${RGW_VFY_SITE}":"${RGW_VFY_PORT}" | grep -q "ListAllMyBucketsResult"; then
+    vlog_red "Failed to connect to ${RGW_VFY_SITE}:${RGW_VFY_PORT}"
+    return 0
+  fi
+  # edit s3cfg, upload & download test file
+  sed -i s/AWS_ACCESS_KEY_PLACEHOLDER/"${RGW_VFY_KEY}"/ /root/.s3cfg || true
+  sed -i s/AWS_SECRET_KEY_PLACEHOLDER/"${RGW_VFY_KEY}"/ /root/.s3cfg || true
+  sed -i "s/host_base = localhost/host_base = ${RGW_VFY_SITE}:${RGW_VFY_PORT}/" /root/.s3cfg || true
+  sed -i "s/host_bucket = localhost/host_bucket = ${RGW_VFY_SITE}:${RGW_VFY_PORT}/" /root/.s3cfg || true
+  if ! s3cmd ls &>/dev/null; then
+    vlog_red "Failed to connect to ${RGW_VFY_SITE}:${RGW_VFY_PORT} with s3cmd"
+    retuen 0
+  elif ! s3cmd mb s3://"${RGW_VFY_BUCKET}" &>/dev/null; then
+    vlog_red "Failed to make bucket s3://${RGW_VFY_BUCKET}"
+    return 0
+  elif ! s3cmd put "${VFY_TEST_FILE}" s3://"${RGW_VFY_BUCKET}" &>/dev/null; then
+    vlog_red "Failed to upload file into s3://${RGW_VFY_BUCKET}"
+    return 0
+  elif ! s3cmd setacl s3://"${RGW_VFY_BUCKET}"/"${VFY_TEST_FILE}" --acl-public &>/dev/null; then
+    vlog_red "Failed to set acl on s3://${RGW_VFY_BUCKET}"
+    return 0
+  elif ! wget -q "${RGW_VFY_SITE}":"${RGW_VFY_PORT}"/"${RGW_VFY_BUCKET}"/"${VFY_TEST_FILE}" -O TEST-FILE-FROM-RGW; then
+    vlog_red "Failed to download file from ${RGW_VFY_SITE}:${RGW_VFY_PORT}"
+    return 0
+  elif ! local VFY_FROM_RGW_MD5=$(md5sum TEST-FILE-FROM-RGW | awk '{print $1}') \
+    || [ "${VFY_FROM_RGW_MD5}" != "${VFY_MD5}" ]; then
+    vlog_red "Wrong checksum when download from RGW website ${RGW_VFY_SITE}:${RGW_VFY_PORT} (${VFY_FROM_RGW_MD5})"
+    return 0
+  else
+    vlog_green "Checksum of RGW oprations is correct (${VFY_FROM_RGW_MD5})"
+  fi
+  # remove file & account
+  if ! s3cmd del s3://"${RGW_VFY_BUCKET}"/"${VFY_TEST_FILE}" &>/dev/null; then
+    vlog_red "Falied to delete file on s3://${RGW_VFY_BUCKET}"
+    return 0
+  elif ! s3cmd rb s3://"${RGW_VFY_BUCKET}" --recursive &>/dev/null; then
+    vlog_red "Falied to remove bucket on s3://${RGW_VFY_BUCKET}"
+    return 0
+  elif ! radosgw-admin "${CLI_OPTS[@]}" user rm --uid="${RGW_VFY_UID}" &>/dev/null; then
+    vlog_red "Failed to remove rgw account uid:${RGW_VFY_UID}"
+    return 0
+  else
+    vlog_green "RGW works well."
+  fi
+}
+
+function vfy_rgw_clean {
+  rm TEST-FILE-FROM-RGW &>/dev/null || true
+  if timeout 10 s3cmd ls s3://"${RGW_VFY_BUCKET}" &>/dev/null; then
+    s3cmd rb s3://"${RGW_VFY_BUCKET}" --recursive &>/dev/null || true
+  fi
+  radosgw-admin "${CLI_OPTS[@]}" user rm --uid="${RGW_VFY_UID}" &>/dev/null || true
 }
 
 function vfy_mds {
