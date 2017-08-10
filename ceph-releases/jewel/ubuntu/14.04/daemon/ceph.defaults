@@ -21,9 +21,9 @@
 /mon/mon_force_quorum_join true
 
 #crush
-/global/osd_pool_default_pg_num 32
-/global/osd_pool_default_pgp_num 32
-/global/osd_pool_default_size 3
+/global/osd_pool_default_pg_num 16
+/global/osd_pool_default_pgp_num 16
+/global/osd_pool_default_size 1
 /osd/pool_default_crush_rule 0
 /osd/osd_crush_update_on_start true
 
