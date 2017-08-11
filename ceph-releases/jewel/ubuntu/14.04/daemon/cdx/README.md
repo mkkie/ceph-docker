@@ -1,5 +1,35 @@
 # CDXVIRT Ceph Daemon
 
+## SERVICE
+### MON
+```txt
+$ docker run -d --net=host -e CDX_ENV=true -e CEPH_PUBLIC_NETWORK="192.168.0.0/24" \
+  -v /var/lib/ceph:/var/lib/ceph cdxvirt/ceph-daemon:latest cdx_mon
+```
+### OSD
+```txt
+$ docker run -d --privileged=true -e CDX_ENV=true -e DAEMON_VERSION=cdxvirt/ceph-daemon:latest \
+  -v /bin/docker:/bin/docker -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /usr/lib64:/host/lib -v /dev:/dev cdxvirt/ceph-daemon:latest cdx_osd
+```
+
+### RGW
+```txt
+$ docker run -d --net=host -e CDX_ENV=true cdxvirt/ceph-daemon:latest rgw
+```
+
+### MDS
+```txt
+$ docker run -d --net=host -e CDX_ENV=true cdxvirt/ceph-daemon:latest mds
+```
+
+### VERIFY
+```
+$ docker run -it --net=host --privileged=true -e CDX_ENV=true -e CEPH_VFY=all \
+  -e HTTP_VFY_PATH=https://some_ip/some_file -e RGW_VFY_SITE=https://rgw_website \
+  -v /lib/modules/:/lib/modules/ -v /dev:/dev cdxvirt/ceph-daemon:latest cdx_verify
+```
+
 ## CDX ENTRYPOINT
 ### cdx_mon
 Brfore running start_mon, check monip, monmap first.
@@ -11,6 +41,8 @@ Kubernetes required.Choose nodes to deploy ceph-mon, update endpoints.
 Operate OSD containers.
 ### admin
 Execute other commands.
+### cdx_verify
+Verify service & function of ceph cluster.
 
 ## CDX ENV
 ### Use CDX_ENV=true to enable it.
@@ -46,12 +78,34 @@ Execute other commands.
 # Resource limits for OSD containers.
 ```
 ### MON
-MAX_MON=3
+- MAX_MON=3
 ```txt
 # How many MON containers in a cluster?
 ```
-K8S_NAMESPACE=ceph
-MON_LABEL="cdx/ceph-mon"
+- K8S_NAMESPACE=ceph
+- MON_LABEL="cdx/ceph-mon"
 ```txt
-Kubernetes MON POD settings.
+# Kubernetes MON POD settings.
+```
+### VERIFY
+- RBD_VFY_POOL=rbd
+```txt
+# Default pool for ceph verifying
+```
+- CEPHFS_VFY_FS=cephfs
+```txt
+# Default ceph filesystem name for ceph verifying
+```
+- RGW_VFY_PORT=${RGW_CIVETWEB_PORT}=18080
+```txt
+# Default RGW website port
+```
+- RGW_VFY_SITE=
+```txt
+# Which RGW website is going to verify?
+# If RGW_VFY_SITE is null, then find IP from kubernetes.
+```
+- HTTP_VFY_PATH=
+```txt
+# You can assign a file by giving url for verifying.
 ```
