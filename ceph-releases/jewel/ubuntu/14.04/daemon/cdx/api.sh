@@ -12,7 +12,7 @@ function cdx_ceph_api {
       check_osd_env
       $@
       ;;
-    set_max_mon|get_max_mon|set_max_osd|get_max_osd|fix_monitor)
+    set_max_mon|get_max_mon|set_max_osd|get_max_osd|fix_monitor|ceph_verify)
       # Commands in this script
       $@
       ;;
@@ -130,5 +130,17 @@ function get_max_osd {
   else
     log "ERROR- Fail to get max_osd"
     return 1
+  fi
+}
+
+function ceph_verify {
+  local C_POD=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" get pod \
+    2>/dev/null | awk '/controller-/ {print $1}' | head -1)
+  # If conteoller POD is running, then use it to verify.
+  local OPTS=$@
+  if [ -n "${C_POD}" ]; then
+    kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" exec "${C_POD}"  -- bash -c "${OPTS} /entrypoint.sh cdx_verify"
+  else
+    log "ERROR- Kubenetes controller not exists."
   fi
 }

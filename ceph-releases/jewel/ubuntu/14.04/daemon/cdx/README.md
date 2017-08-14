@@ -30,6 +30,42 @@ $ docker run -it --net=host --privileged=true -e CDX_ENV=true -e CEPH_VFY=all \
   -v /lib/modules/:/lib/modules/ -v /dev:/dev cdxvirt/ceph-daemon:latest cdx_verify
 ```
 
+## API
+### OSD
+```txt
+$ docker exec K8S-OSD-POD ceph-api $OSD-API
+```
+OSD-API=
+- start_all_osds
+- stop_all_osds
+- restart_all_osds
+- get_active_osd_nums
+- run_osds
+
+### ETCD
+```txt
+$ docker exec ANY-CEPH-K8S-POD ceph-api $ETCD-API
+```
+ETCD-API=
+- set_max_mon $number
+- get_max_mon
+- set_max_osd $number
+- get_max_osd
+
+### FIX MON DOWN
+```txt
+$ docker exec ANY-CEPH-K8S-POD ceph-api fix_monitor
+```
+
+### CEPH VERIFY
+```txt
+$ docker exec ANY-CEPH-K8S-POD ceph-api ceph_verify $OPT1 $OPT2
+```
+OPTS =>
+- CEPH_VFY=all
+- CEPH_VFY=rbd,rgw,mds # separate by comma.
+- HTTP_VFY_PATH=http://xxx # URL of test file
+
 ## CDX ENTRYPOINT
 ### cdx_mon
 Brfore running start_mon, check monip, monmap first.
@@ -88,6 +124,11 @@ Verify service & function of ceph cluster.
 # Kubernetes MON POD settings.
 ```
 ### VERIFY
+- CEPH_VFY=all
+```txt
+# Items for varifying, separate by comma.
+# e.g. CEPH_VFY=rbd,rgw,mds
+```
 - RBD_VFY_POOL=rbd
 ```txt
 # Default pool for ceph verifying

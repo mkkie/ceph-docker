@@ -190,7 +190,7 @@ function vfy_rgw {
   fi
   # get RGW website IP & check connection
   if [ -z "${RGW_VFY_SITE}" ]; then
-    RGW_VFY_SITE=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" get pod -o wide | awk '/ceph-rgw-/ {print $7}')
+    RGW_VFY_SITE=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" get pod -o wide | awk '/ceph-rgw-/ {print $7}' | head -n 1)
   fi
   if [ -z "${RGW_VFY_SITE}" ]; then
     vlog_red "Please assign \$RGW_VFY_SITE"
