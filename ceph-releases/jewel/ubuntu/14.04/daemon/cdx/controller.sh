@@ -7,7 +7,7 @@ function cdx_controller {
 
   while [ true ]; do
     controller_main
-    sleep 60
+    sleep 30
   done
 }
 

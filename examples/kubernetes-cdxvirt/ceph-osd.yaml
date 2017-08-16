@@ -8,6 +8,16 @@ spec:
     metadata:
       labels:
         name: ceph-osd
+      annotations:
+        pod.beta.kubernetes.io/init-containers: '[
+            {
+                "name": "check-monitor-running",
+                "image": "cdxvirt/ceph-daemon:latest",
+                "imagePullPolicy": "IfNotPresent",
+                "command": ["/bin/bash","-c"],
+                "args": ["source /cdx/cdx-env.sh && curl ceph-mon.ceph:6789"]
+            }
+        ]'
     spec:
       hostNetwork: true
       nodeSelector:
@@ -47,7 +57,7 @@ spec:
               value: "true"
           livenessProbe:
             failureThreshold: 3
-            initialDelaySeconds: 60
+            initialDelaySeconds: 180
             periodSeconds: 10
             successThreshold: 1
             exec:
