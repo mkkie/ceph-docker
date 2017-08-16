@@ -34,14 +34,14 @@ function get_verify_options {
 }
 
 function prepare_test_file {
-  vlog_normal "PREPARE TEST FILE"
   # only rbd rgw mds needs test file
   if ! command -v md5sum &>/dev/null; then
-    vlog_red "md5sum: command not found."
+    vlog_red "md5sum: command not found. We meed to verify checksum."
     exit 1
   elif [ -z "${VFY_LIST}" ]; then
     return 0
   fi
+  vlog_normal "PREPARE TEST FILE"
   # create test file
   if [ -n "${HTTP_VFY_PATH}" ]; then
     vlog_normal "Test file is downloading."
