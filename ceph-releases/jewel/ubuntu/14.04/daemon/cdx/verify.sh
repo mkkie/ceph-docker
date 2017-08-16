@@ -206,7 +206,7 @@ function vfy_rgw {
   sed -i "s/host_bucket = localhost/host_bucket = ${RGW_VFY_SITE}:${RGW_VFY_PORT}/" /root/.s3cfg || true
   if ! s3cmd ls &>/dev/null; then
     vlog_red "Failed to connect to ${RGW_VFY_SITE}:${RGW_VFY_PORT} with s3cmd"
-    retuen 0
+    return 0
   elif ! s3cmd mb s3://"${RGW_VFY_BUCKET}" &>/dev/null; then
     vlog_red "Failed to make bucket s3://${RGW_VFY_BUCKET}"
     return 0
