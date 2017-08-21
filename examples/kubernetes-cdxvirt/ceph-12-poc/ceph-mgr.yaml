@@ -1,0 +1,32 @@
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  name: ceph-mgr
+  labels:
+    name: ceph-mgr
+  namespace: ceph
+spec:
+  template:
+    metadata:
+      labels:
+        name: ceph-mgr
+    spec:
+      hostNetwork: true
+      nodeSelector:
+        cdx/ceph-mgr: "true"
+      volumes:
+        - name: localtime
+          hostPath:
+            path: /etc/localtime
+      containers:
+        - name: ceph-mgr-pod
+          image: cdxvirt/ceph-daemon:latest
+          args: ["mgr"]
+          env:
+#            - name: "DEBUG"
+#              value: "verbose"
+            - name: "CDX_ENV"
+              value: "true"
+          volumeMounts:
+            - name: localtime
+              mountPath: /etc/localtime
