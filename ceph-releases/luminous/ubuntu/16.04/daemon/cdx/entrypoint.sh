@@ -35,7 +35,7 @@ esac
 # Normalize DAEMON to lowercase
 CEPH_DAEMON=$(to_lowercase "${CEPH_DAEMON}")
 
-create_mandatory_directories
+create_mandatory_directories >/dev/null
 
 # If we are given a valid first argument, set the
 # CEPH_DAEMON variable from it
@@ -47,7 +47,6 @@ case "$CEPH_DAEMON" in
     ;;
   mon)
     # TAG: mon
-    source cdx/mon.sh
     source start_mon.sh
     start_mon
     ;;
@@ -153,12 +152,9 @@ case "$CEPH_DAEMON" in
     # TAG: demo
     source demo.sh
     ;;
-  cdx_osd)
-    source cdx/osd.sh
-    ;;
-  bash)
+  cdx*|ceph-api|admin)
     shift
-    exec_own_command $@
+    cdx_entrypoint "$CEPH_DAEMON" $@
     ;;
   *)
     invalid_ceph_daemon

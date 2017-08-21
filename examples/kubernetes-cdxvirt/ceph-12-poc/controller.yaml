@@ -1,31 +1,32 @@
-apiVersion: extensions/v1beta1
-kind: DaemonSet
+kind: ReplicationController
+apiVersion: v1
 metadata:
-  name: ceph-mon
-  labels:
-    name: ceph-mon
+  name: cdx-controller
   namespace: ceph
 spec:
   template:
     metadata:
       labels:
-        name: ceph-mon
+        name: cdx-controller
     spec:
       hostNetwork: true
-      nodeSelector:
-        cdx/ceph-mon: "true"
       volumes:
-        - name: cephdata
-          hostPath:
-            path: /var/lib/ceph
         - name: localtime
           hostPath:
             path: /etc/localtime
+        - name: dev
+          hostPath:
+            path: /dev
+        - name: lib-modules
+          hostPath:
+            path: /lib/modules
       containers:
-        - name: ceph-mon-pod
+        - name: cdx-controller-pod
           image: cdxvirt/ceph-daemon:latest
           imagePullPolicy: IfNotPresent
-          args: ["cdx_mon"]
+          securityContext:
+            privileged: true
+          args: ["cdx_controller"]
           env:
             - name: "CEPH_PUBLIC_NETWORK"
               value: "192.168.32.0/23"
@@ -37,17 +38,10 @@ spec:
 #              value: "verbose"
             - name: "CDX_ENV"
               value: "true"
-          livenessProbe:
-            failureThreshold: 3
-            initialDelaySeconds: 60
-            periodSeconds: 10
-            successThreshold: 1
-            exec:
-              command:
-              - /cdx/mon-liveprobe.sh
-            timeoutSeconds: 5
           volumeMounts:
-            - name: cephdata
-              mountPath: /var/lib/ceph
             - name: localtime
               mountPath: /etc/localtime
+            - name: dev
+              mountPath: /dev
+            - name: lib-modules
+              mountPath: /lib/modules
