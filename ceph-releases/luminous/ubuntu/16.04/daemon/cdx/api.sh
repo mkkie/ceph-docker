@@ -129,7 +129,7 @@ function get_max_osd {
 
 function ceph_verify {
   local C_POD=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" get pod \
-    2>/dev/null | awk '/controller-/ {print $1}' | head -1)
+    2>/dev/null | awk '/ceph-controller-/ {print $1}' | head -1)
   # If conteoller POD is running, then use it to verify.
   local OPTS=$@
   if [ -n "${C_POD}" ]; then
