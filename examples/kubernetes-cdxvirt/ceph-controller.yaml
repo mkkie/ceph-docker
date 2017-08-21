@@ -1,13 +1,13 @@
 kind: ReplicationController
 apiVersion: v1
 metadata:
-  name: mon-controller
+  name: ceph-controller
   namespace: ceph
 spec:
   template:
     metadata:
       labels:
-        name: mon-controller
+        name: ceph-controller
     spec:
       hostNetwork: true
       volumes:
@@ -21,7 +21,7 @@ spec:
           hostPath:
             path: /lib/modules
       containers:
-        - name: mon-controller-pod
+        - name: ceph-controller-pod
           image: cdxvirt/ceph-daemon:latest
           imagePullPolicy: IfNotPresent
           securityContext:
