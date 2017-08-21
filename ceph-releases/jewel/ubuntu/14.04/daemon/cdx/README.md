@@ -8,7 +8,8 @@ $ docker run -d --net=host -e CDX_ENV=true -e CEPH_PUBLIC_NETWORK="192.168.0.0/2
 ```
 ### OSD
 ```txt
-$ docker run -d --privileged=true -e CDX_ENV=true -e DAEMON_VERSION=cdxvirt/ceph-daemon:latest \
+$ docker run -d --net=host --privileged=true -e CDX_ENV=true \
+  -e DAEMON_VERSION=cdxvirt/ceph-daemon:latest \
   -v /bin/docker:/bin/docker -v /var/run/docker.sock:/var/run/docker.sock \
   -v /usr/lib64:/host/lib -v /dev:/dev cdxvirt/ceph-daemon:latest cdx_osd
 ```
