@@ -2,6 +2,7 @@
 set -e
 export LC_ALL=C
 
+source cdx/cdx.sh
 source variables_entrypoint.sh
 source common_functions.sh
 source debug.sh
@@ -34,7 +35,7 @@ esac
 # Normalize DAEMON to lowercase
 CEPH_DAEMON=$(to_lowercase "${CEPH_DAEMON}")
 
-create_mandatory_directories
+create_mandatory_directories >/dev/null
 
 # If we are given a valid first argument, set the
 # CEPH_DAEMON variable from it
@@ -150,6 +151,10 @@ case "$CEPH_DAEMON" in
   demo)
     # TAG: demo
     source demo.sh
+    ;;
+  cdx*|ceph-api|admin)
+    shift
+    cdx_entrypoint "$CEPH_DAEMON" $@
     ;;
   *)
     invalid_ceph_daemon
