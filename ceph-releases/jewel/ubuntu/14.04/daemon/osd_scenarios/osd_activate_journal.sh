@@ -11,9 +11,9 @@ function osd_activate_journal {
   udevadm settle --timeout=600
 
   # wait till partition exists
-  wait_for "${OSD_JOURNAL}"
+  wait_for_file "${OSD_JOURNAL}"
 
-  chown --verbose ceph. "${OSD_JOURNAL}"
+  chown "${CHOWN_OPT[@]}" ceph. "${OSD_JOURNAL}"
   ceph-disk -v --setuser ceph --setgroup disk activate-journal "${OSD_JOURNAL}"
 
   start_osd

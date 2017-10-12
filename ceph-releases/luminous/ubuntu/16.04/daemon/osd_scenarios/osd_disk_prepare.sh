@@ -45,33 +45,48 @@ function osd_disk_prepare {
     fi
   fi
 
+  IFS=" " read -r -a CEPH_DISK_CLI_OPTS <<< "${CLI_OPTS[*]}"
+  if [[ ${OSD_DMCRYPT} -eq 1 ]]; then
+    # We need to do a mapfile because ${OSD_LOCKBOX_UUID} needs to be quoted
+    # so doing a regular CLI_OPTS+=("${OSD_LOCKBOX_UUID}") will make shellcheck unhappy.
+    # Although the array can still be incremented by the others task using a regular += operator
+    mapfile -t CEPH_DISK_CLI_OPTS_ARRAY <<< "${CEPH_DISK_CLI_OPTS[*]} --dmcrypt --lockbox-uuid ${OSD_LOCKBOX_UUID}"
+    IFS=" " read -r -a CEPH_DISK_CLI_OPTS <<< "${CEPH_DISK_CLI_OPTS_ARRAY[*]}"
+  fi
   if [[ ${OSD_BLUESTORE} -eq 1 ]]; then
-    ceph-disk -v prepare "${CLI_OPTS[@]}" --bluestore \
+    CEPH_DISK_CLI_OPTS+=(--bluestore)
+    ceph-disk -v prepare "${CEPH_DISK_CLI_OPTS[@]}" \
     --block.wal "${OSD_BLUESTORE_BLOCK_WAL}" \
     --block.wal-uuid "${OSD_BLUESTORE_BLOCK_WAL_UUID}" \
     --block.db "${OSD_BLUESTORE_BLOCK_DB}" \
     --block.db-uuid "${OSD_BLUESTORE_BLOCK_DB_UUID}" \
     --block-uuid "${OSD_BLUESTORE_BLOCK_UUID}" \
     "${OSD_DEVICE}"
-  elif [[ ${OSD_DMCRYPT} -eq 1 ]]; then
-    get_admin_key
-    check_admin_key
-    # the admin key must be present on the node
-    # in order to store the encrypted key in the monitor's k/v store
+  elif [[ "${OSD_FILESTORE}" -eq 1 ]]; then
+    CEPH_DISK_CLI_OPTS+=(--filestore)
     if [[ -n "${OSD_JOURNAL}" ]]; then
-      ceph-disk -v prepare "${CLI_OPTS[@]}" --journal-uuid "${OSD_JOURNAL_UUID}" --lockbox-uuid "${OSD_LOCKBOX_UUID}" --dmcrypt "${OSD_DEVICE}" "${OSD_JOURNAL}"
+      ceph-disk -v prepare "${CEPH_DISK_CLI_OPTS[@]}" --journal-uuid "${OSD_JOURNAL_UUID}" "${OSD_DEVICE}" "${OSD_JOURNAL}"
     else
-      ceph-disk -v prepare "${CLI_OPTS[@]}" --journal-uuid "${OSD_JOURNAL_UUID}" --lockbox-uuid "${OSD_LOCKBOX_UUID}" --dmcrypt "${OSD_DEVICE}"
+      ceph-disk -v prepare "${CEPH_DISK_CLI_OPTS[@]}" --journal-uuid "${OSD_JOURNAL_UUID}" "${OSD_DEVICE}"
     fi
-    echo "Unmounting LOCKBOX directory"
-    # NOTE(leseb): adding || true so when this bug will be fixed the entrypoint will not fail
-    # Ceph bug tracker: http://tracker.ceph.com/issues/18944
-    DATA_UUID=$(blkid -o value -s PARTUUID "$(dev_part "${OSD_DEVICE}" 1)")
-    umount /var/lib/ceph/osd-lockbox/"${DATA_UUID}" || true
-  elif [[ -n "${OSD_JOURNAL}" ]]; then
-    ceph-disk -v prepare "${CLI_OPTS[@]}" --filestore --journal-uuid "${OSD_JOURNAL_UUID}" "${OSD_DEVICE}" "${OSD_JOURNAL}"
-  else
-    ceph-disk -v prepare "${CLI_OPTS[@]}" --filestore --journal-uuid "${OSD_JOURNAL_UUID}" "${OSD_DEVICE}"
+  fi
+
+  if [[ ${OSD_DMCRYPT} -eq 1 ]]; then
+    # unmount lockbox partition when using dmcrypt
+    umount_lockbox
+
+    # close dmcrypt device
+    # shellcheck disable=SC2034
+    DATA_UUID=$(get_part_uuid "$(dev_part "${OSD_DEVICE}" 1)")
+    # shellcheck disable=SC2034
+    DATA_PART=$(dev_part "${OSD_DEVICE}" 1)
+    if [[ ${OSD_BLUESTORE} -eq 1 ]]; then
+      get_dmcrypt_bluestore_uuid
+      close_encrypted_parts_bluestore
+    elif [[ "${OSD_FILESTORE}" -eq 1 ]]; then
+      get_dmcrypt_filestore_uuid
+      close_encrypted_parts_filestore
+    fi
   fi
 
   # watch the udev event queue, and exit if all current events are handled

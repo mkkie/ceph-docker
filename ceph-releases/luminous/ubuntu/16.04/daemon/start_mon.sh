@@ -117,10 +117,10 @@ function start_mon {
     exit 1
   fi
 
-  get_mon_config $ip_version
-
   # If we don't have a monitor keyring, this is a new monitor
   if [ ! -e "$MON_DATA_DIR/keyring" ]; then
+    get_mon_config $ip_version
+
     if [ ! -e "$MON_KEYRING" ]; then
       log "ERROR- $MON_KEYRING must exist.  You can extract it from your current monitor by running 'ceph auth get mon. -o $MON_KEYRING' or use a KV Store"
       exit 1
@@ -132,7 +132,7 @@ function start_mon {
     fi
 
     # Testing if it's not the first monitor, if one key doesn't exist we assume none of them exist
-    for keyring in $OSD_BOOTSTRAP_KEYRING $MDS_BOOTSTRAP_KEYRING $RGW_BOOTSTRAP_KEYRING $ADMIN_KEYRING; do
+    for keyring in $OSD_BOOTSTRAP_KEYRING $MDS_BOOTSTRAP_KEYRING $RGW_BOOTSTRAP_KEYRING $RBD_MIRROR_BOOTSTRAP_KEYRING $ADMIN_KEYRING; do
       ceph-authtool "$MON_KEYRING" --import-keyring "$keyring"
     done
 

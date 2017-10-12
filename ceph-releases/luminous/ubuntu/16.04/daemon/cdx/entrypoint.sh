@@ -118,9 +118,6 @@ case "$CEPH_DAEMON" in
     ;;
   nfs)
     # TAG: nfs
-    echo "Temporarily disabled due to broken package dependencies with nfs-ganesha"
-    echo "For more info see: https://github.com/ceph/ceph-docker/pull/564"
-    exit 1
     source start_nfs.sh
     start_nfs
     ;;
@@ -151,6 +148,11 @@ case "$CEPH_DAEMON" in
   demo)
     # TAG: demo
     source demo.sh
+    ;;
+  disk_list)
+    # TAG: disk_list
+    source disk_list.sh
+    start_disk_list
     ;;
   cdx*|ceph-api|admin)
     shift
