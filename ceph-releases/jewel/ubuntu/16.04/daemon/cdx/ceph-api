@@ -1,3 +1,1 @@
-#! /bin/bash
-
-CDX_ENV=true /entrypoint.sh ceph-api $@
+../../../14.04/daemon/cdx/ceph-api
