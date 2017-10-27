@@ -4,7 +4,7 @@
 #
 # VERSION 0.0.1
 
-FROM ceph/base:tag-build-master-jewel-ubuntu-16.04
+FROM cdxvirt/ceph-base:base-10.2.10-1
 MAINTAINER Sébastien Han "seb@redhat.com"
 
 # Add bootstrap script, ceph defaults key/values for KV store
@@ -24,6 +24,10 @@ ADD ./confd/conf.d/* /etc/confd/conf.d/
 
 # Add volumes for Ceph config and data
 VOLUME ["/etc/ceph","/var/lib/ceph", "/etc/ganesha"]
+
+# Add cdxvirt scripts
+ADD cdx /cdx
+RUN mv /cdx/ceph-api /usr/local/bin/ceph-api
 
 # Execute the entrypoint
 WORKDIR /
