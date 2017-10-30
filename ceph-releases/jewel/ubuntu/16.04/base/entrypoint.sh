@@ -1,1 +1,6 @@
-../../14.04/base/entrypoint.sh
+#!/bin/sh
+if [ -z "$1" ]; then
+  /bin/bash
+else
+  $@
+fi
