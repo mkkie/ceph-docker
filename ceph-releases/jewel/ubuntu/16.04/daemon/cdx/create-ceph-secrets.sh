@@ -1,0 +1,1 @@
+../../../14.04/daemon/cdx/create-ceph-secrets.sh

@@ -1,22 +1,33 @@
 #!/bin/bash
+# shellcheck disable=SC2034
 set -e
+source disk_list.sh
 
 function osd_activate {
-  if [[ -z "${OSD_DEVICE}" ]];then
-    log "ERROR- You must provide a device to build your OSD ie: /dev/sdb"
+  if [[ -z "${OSD_DEVICE}" ]] || [[ ! -b "${OSD_DEVICE}" ]]; then
+    log "ERROR: you either provided a non-existing device or no device at all."
+    log "You must provide a device to build your OSD ie: /dev/sdb"
     exit 1
   fi
 
   CEPH_DISK_OPTIONS=()
-  DATA_UUID=$(get_part_uuid "$(dev_part "${OSD_DEVICE}" 1)")
-  if [[ -n "${OSD_JOURNAL}" ]]; then
-    CLI+=("${OSD_JOURNAL}")
-  else
-    CLI+=("${OSD_DEVICE}")
+
+  if [[ ${OSD_FILESTORE} -eq 1 ]] && [[ ${OSD_DMCRYPT} -eq 0 ]]; then
+    if [[ -n "${OSD_JOURNAL}" ]]; then
+      CLI+=("${OSD_JOURNAL}")
+    else
+      CLI+=("${OSD_DEVICE}")
+    fi
+    export DISK_LIST_SEARCH=journal
+    start_disk_list
+    JOURNAL_PART=$(start_disk_list)
+    unset DISK_LIST_SEARCH
+    JOURNAL_UUID=$(get_part_uuid "${JOURNAL_PART}")
   fi
-  JOURNAL_PART=$(ceph-disk list "${CLI[@]}" | awk '/ceph journal/ {print $1}') # This is privileged container so 'ceph-disk list' works
-  JOURNAL_UUID=$(get_part_uuid "${JOURNAL_PART}" || true)
-  LOCKBOX_UUID=$(get_part_uuid "$(dev_part "${OSD_DEVICE}" 5)" || true)
+
+  # creates /dev/mapper/<uuid> for dmcrypt
+  # usually after a reboot they don't go created
+  udevadm trigger
 
   # watch the udev event queue, and exit if all current events are handled
   udevadm settle --timeout=600
@@ -24,28 +35,18 @@ function osd_activate {
   DATA_PART=$(dev_part "${OSD_DEVICE}" 1)
   MOUNTED_PART=${DATA_PART}
 
-  if [[ ${OSD_DMCRYPT} -eq 1 ]]; then
-    log "Mounting LOCKBOX directory"
-    # NOTE(leseb): adding || true so when this bug will be fixed the entrypoint will not fail
-    # Ceph bug tracker: http://tracker.ceph.com/issues/18945
-    mkdir -p /var/lib/ceph/osd-lockbox/"${DATA_UUID}"
-    mount /dev/disk/by-partuuid/"${LOCKBOX_UUID}" /var/lib/ceph/osd-lockbox/"${DATA_UUID}" || true
-    local ceph_fsid
-    local cluster_name
-    cluster_name=$(basename "$(grep -R fsid /etc/ceph/ | grep -oE '^[^.]*')")
-    ceph_fsid=$(ceph-conf --lookup fsid -c /etc/ceph/"$cluster_name".conf)
-    echo "$ceph_fsid" > /var/lib/ceph/osd-lockbox/"${DATA_UUID}"/ceph_fsid
-    chown --verbose ceph. /var/lib/ceph/osd-lockbox/"${DATA_UUID}"/ceph_fsid
+  if [[ ${OSD_DMCRYPT} -eq 1 ]] && [[ ${OSD_FILESTORE} -eq 1 ]]; then
+    get_dmcrypt_filestore_uuid
+    mount_lockbox "$DATA_UUID" "$LOCKBOX_UUID"
     CEPH_DISK_OPTIONS+=('--dmcrypt')
     MOUNTED_PART="/dev/mapper/${DATA_UUID}"
-
-    # Open LUKS device(s) if necessary
-    if [[ ! -e /dev/mapper/"${DATA_UUID}" ]]; then
-      open_encrypted_part "${DATA_UUID}" "${DATA_PART}" "${DATA_UUID}"
-    fi
-    if [[ ! -e /dev/mapper/"${JOURNAL_UUID}" ]]; then
-      open_encrypted_part "${JOURNAL_UUID}" "${JOURNAL_PART}" "${DATA_UUID}"
-    fi
+    open_encrypted_parts_filestore
+  elif [[ ${OSD_DMCRYPT} -eq 1 ]] && [[ ${OSD_BLUESTORE} -eq 1 ]]; then
+    get_dmcrypt_bluestore_uuid
+    mount_lockbox "$DATA_UUID" "$LOCKBOX_UUID"
+    CEPH_DISK_OPTIONS+=('--dmcrypt')
+    MOUNTED_PART="/dev/mapper/${DATA_UUID}"
+    open_encrypted_parts_bluestore
   fi
 
   if [[ -z "${CEPH_DISK_OPTIONS[*]}" ]]; then
@@ -55,7 +56,6 @@ function osd_activate {
   fi
 
   OSD_ID=$(grep "${MOUNTED_PART}" /proc/mounts | awk '{print $2}' | sed -r 's/^.*-([0-9]+)$/\1/')
-  calculate_osd_weight
 
   if [[ ${OSD_BLUESTORE} -eq 1 ]]; then
     # Get the device used for block db and wal otherwise apply_ceph_ownership_to_disks will fail
@@ -68,8 +68,6 @@ function osd_activate {
     OSD_BLUESTORE_BLOCK_WAL=${OSD_BLUESTORE_BLOCK_WAL_TMP%?}
   fi
   apply_ceph_ownership_to_disks
-
-  add_osd_to_crush
 
   log "SUCCESS"
   exec /usr/bin/ceph-osd "${CLI_OPTS[@]}" -f -i "${OSD_ID}" --setuser ceph --setgroup disk

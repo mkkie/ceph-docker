@@ -5,7 +5,7 @@
 # LIST OF ALL SCENARIOS AVAILABLE #
 ###################################
 
-ALL_SCENARIOS="populate_kvstore mon osd osd_directory osd_directory_single osd_ceph_disk osd_ceph_disk_prepare osd_ceph_disk_activate osd_ceph_activate_journal mds rgw rgw_user restapi nfs zap_device mon_health mgr disk_introspection demo"
+ALL_SCENARIOS="populate_kvstore mon osd osd_directory osd_directory_single osd_ceph_disk osd_ceph_disk_prepare osd_ceph_disk_activate osd_ceph_activate_journal mds rgw rgw_user restapi nfs zap_device mon_health mgr disk_introspection demo disk_list"
 
 
 #########################
@@ -22,10 +22,11 @@ ALL_SCENARIOS="populate_kvstore mon osd osd_directory osd_directory_single osd_c
 : "${MON_DATA_DIR:=/var/lib/ceph/mon/${CLUSTER}-${MON_NAME}}"
 : "${K8S_HOST_NETWORK:=0}"
 : "${NETWORK_AUTO_DETECT:=0}"
-: "${MDS_NAME:=mds-${HOSTNAME}}"
+: "${MDS_NAME:=${HOSTNAME}}"
 : "${OSD_FORCE_ZAP:=0}"
 : "${OSD_JOURNAL_SIZE:=100}"
-: "${OSD_BLUESTORE:=0}"
+: "${OSD_BLUESTORE:=1}"
+: "${OSD_FILESTORE:=0}"
 : "${OSD_BLUESTORE_BLOCK_UUID:=$(uuidgen)}"
 : "${OSD_BLUESTORE_BLOCK_DB:=$OSD_DEVICE}"
 : "${OSD_BLUESTORE_BLOCK_DB_UUID:=$(uuidgen)}"
@@ -41,6 +42,7 @@ ALL_SCENARIOS="populate_kvstore mon osd osd_directory osd_directory_single osd_c
 : "${CEPHFS_METADATA_POOL:=${CEPHFS_NAME}_metadata}"
 : "${CEPHFS_METADATA_POOL_PG:=8}"
 : "${RGW_NAME:=${HOSTNAME}}"
+: "${RBD_MIRROR_NAME:=${HOSTNAME}}"
 : "${RGW_ZONEGROUP:=}"
 : "${RGW_ZONE:=}"
 : "${RGW_CIVETWEB_IP:=0.0.0.0}"
@@ -62,6 +64,16 @@ ALL_SCENARIOS="populate_kvstore mon osd osd_directory osd_directory_single osd_c
 : "${MGR_NAME:=${HOSTNAME}}"
 : "${MGR_DASHBOARD:=1}"
 : "${MGR_IP:=0.0.0.0}"
+: "${MGR_PORT:=7000}"
+
+# Make sure to change the value of one another if user changes some of the default values
+while read -r line; do
+  if [[ "$line" == "OSD_FILESTORE=1" ]]; then
+    OSD_BLUESTORE=0
+  elif [[ "$line" == "OSD_BLUESTORE=1" ]]; then
+    OSD_FILESTORE=0
+  fi
+done < <(env)
 
 # Create a default array
 CRUSH_LOCATION_DEFAULT=("root=default" "host=${HOSTNAME}")
@@ -74,7 +86,6 @@ CLI_OPTS=(--cluster ${CLUSTER})
 DAEMON_OPTS=(--cluster ${CLUSTER} --setuser ceph --setgroup ceph -d)
 
 MOUNT_OPTS=(-t xfs -o noatime,inode64)
-ETCDCTL_OPTS=(--peers ${KV_IP}:${KV_PORT})
 
 # make sure etcd uses http or https as a prefix
 if [[ "$KV_TYPE" == "etcd" ]]; then
@@ -85,16 +96,20 @@ if [[ "$KV_TYPE" == "etcd" ]]; then
   else
     CONFD_NODE_SCHEMA="http://"
   fi
+  ETCD_SCHEMA=${CONFD_NODE_SCHEMA}
+  ETCDCTL_OPTS=(--peers ${ETCD_SCHEMA}${KV_IP}:${KV_PORT})
 fi
 
 # Internal variables
 MDS_KEYRING=/var/lib/ceph/mds/${CLUSTER}-${MDS_NAME}/keyring
 ADMIN_KEYRING=/etc/ceph/${CLUSTER}.client.admin.keyring
 MON_KEYRING=/etc/ceph/${CLUSTER}.mon.keyring
-RGW_KEYRING=/var/lib/ceph/radosgw/${RGW_NAME}/keyring
+RGW_KEYRING=/var/lib/ceph/radosgw/${CLUSTER}-rgw.${RGW_NAME}/keyring
 MDS_BOOTSTRAP_KEYRING=/var/lib/ceph/bootstrap-mds/${CLUSTER}.keyring
 RGW_BOOTSTRAP_KEYRING=/var/lib/ceph/bootstrap-rgw/${CLUSTER}.keyring
 OSD_BOOTSTRAP_KEYRING=/var/lib/ceph/bootstrap-osd/${CLUSTER}.keyring
+RBD_MIRROR_BOOTSTRAP_KEYRING=/var/lib/ceph/bootstrap-rbd/${CLUSTER}.keyring
 OSD_PATH_BASE=/var/lib/ceph/osd/${CLUSTER}
 MONMAP=/etc/ceph/monmap-${CLUSTER}
 MGR_KEYRING=/var/lib/ceph/mgr/${CLUSTER}-${MGR_NAME}/keyring
+RBD_MIRROR_KEYRING=/etc/ceph/${CLUSTER}.client.rbd-mirror.${HOSTNAME}.keyring

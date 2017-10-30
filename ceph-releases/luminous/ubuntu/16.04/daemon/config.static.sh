@@ -24,16 +24,11 @@ function get_mon_config {
 fsid = $fsid
 mon initial members = ${MON_NAME}
 mon host = ${MON_IP}
-auth cluster required = cephx
-auth service required = cephx
-auth client required = cephx
 osd crush chooseleaf type = 0
 osd journal size = 100
-osd pool default pg num = 8
-osd pool default pgp num = 8
-osd pool default size = 1
 public network = ${CEPH_PUBLIC_NETWORK}
 cluster network = ${CEPH_PUBLIC_NETWORK}
+log file = /dev/null
 ENDHERE
 
       # For ext4
@@ -49,12 +44,10 @@ ENDHERE
 fsid = $fsid
 mon initial members = ${MON_NAME}
 mon host = ${MON_IP}
-auth cluster required = cephx
-auth service required = cephx
-auth client required = cephx
 public network = ${CEPH_PUBLIC_NETWORK}
 cluster network = ${CEPH_CLUSTER_NETWORK}
 osd journal size = ${OSD_JOURNAL_SIZE}
+log file = /dev/null
 ENDHERE
     fi
     if [ "$IP_LEVEL" -eq 6 ]; then
@@ -96,8 +89,12 @@ ENDHERE
     ceph-authtool "$RGW_BOOTSTRAP_KEYRING" --create-keyring --gen-key -n client.bootstrap-rgw --cap mon 'allow profile bootstrap-rgw'
   fi
 
+  if [ ! -e "$RBD_MIRROR_BOOTSTRAP_KEYRING" ]; then
+    # Generate the RBD Mirror bootstrap key
+    ceph-authtool "$RBD_MIRROR_BOOTSTRAP_KEYRING" --create-keyring --gen-key -n client.bootstrap-rbd --cap mon 'allow profile bootstrap-rbd'
+  fi
     # Apply proper permissions to the keys
-    chown --verbose ceph. "$MON_KEYRING" "$OSD_BOOTSTRAP_KEYRING" "$MDS_BOOTSTRAP_KEYRING" "$RGW_BOOTSTRAP_KEYRING"
+    chown "${CHOWN_OPT[@]}" ceph. "$MON_KEYRING" "$OSD_BOOTSTRAP_KEYRING" "$MDS_BOOTSTRAP_KEYRING" "$RGW_BOOTSTRAP_KEYRING" "$RBD_MIRROR_BOOTSTRAP_KEYRING"
 
   if [ ! -e "$MONMAP" ]; then
     if [ -e /etc/ceph/monmap ]; then
@@ -107,7 +104,7 @@ ENDHERE
       # Generate initial monitor map
       monmaptool --create --add "${MON_NAME}" "${MON_IP}:6789" --fsid "${fsid}" "$MONMAP"
     fi
-    chown --verbose ceph. "$MONMAP"
+    chown "${CHOWN_OPT[@]}" ceph. "$MONMAP"
   fi
 }
 

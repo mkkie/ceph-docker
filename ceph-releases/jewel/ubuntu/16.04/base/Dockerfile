@@ -15,8 +15,14 @@ ADD https://github.com/kelseyhightower/confd/releases/download/v${CONFD_VERSION}
 # Packages list
 ARG PACKAGES="ceph radosgw rbd-mirror sharutils etcd"
 
+# cdxvirt packages
+ARG CDXVIRT_PKG="curl rsync pciutils grep grepcidr inotify-tools hdparm mdadm lvm2 s3cmd net-tools jq"
+
 # install prerequisites
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y wget unzip uuid-runtime python-setuptools udev runit sharutils python3 && \
+\
+# install packages for cdxvirt
+    apt-get install -y $CDXVIRT_PKG && \
 \
 # install ceph and ganesha
     wget -q -O- 'https://download.ceph.com/keys/release.asc' | apt-key add - && \
