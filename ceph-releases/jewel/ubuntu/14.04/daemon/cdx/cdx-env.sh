@@ -75,20 +75,21 @@ function check_k8s_env {
 }
 
 function check_kv_ip {
+  local SCHEMA="http://"
   # 1. Search K8S_NETWORK first
   local K8S_NODE_IP=$(ip -4 -o a | awk '{ sub ("/..", "", $4); print $4 }' | grepcidr "$K8S_NETWORK" 2>/dev/null) || true
-  if etcdctl --peers "${K8S_NODE_IP}":"${KV_PORT}" ls &>/dev/null; then
+  if etcdctl --peers "${SCHEMA}${K8S_NODE_IP}:${KV_PORT}" ls &>/dev/null; then
     KV_IP=${K8S_NODE_IP}
     return 0
   fi
   # 2. If container not deploy by K8S, then search FLANNEL_NETWORK
   local FLANNEL_GW=$(route -n | awk '/UG/ {print $2 }' | head -n 1) || true
-  if etcdctl --peers "${FLANNEL_GW}":"${KV_PORT}" ls &>/dev/null; then
+  if etcdctl --peers "${SCHEMA}${FLANNEL_GW}:${KV_PORT}" ls &>/dev/null; then
     KV_IP=${FLANNEL_GW}
     return 0
   fi
   # 3. The last method, use KV_IP default value
-  if etcdctl --peers "${KV_IP}":"${KV_PORT}" ls &>/dev/null; then
+  if etcdctl --peers "${SCHEMA}${KV_IP}:${KV_PORT}" ls &>/dev/null; then
     return 0
   else
     echo "ERROR- Can't connect to ETCD Server. Please check the following settings: "
