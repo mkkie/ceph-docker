@@ -88,11 +88,16 @@ function update_etcd_monmap {
 ## MAIN
 function cdx_mon {
   get_mon_ip_from_public
+
   if [ "${KV_TYPE}" == "etcd" ]; then
     populate_etcd
     remove_mon_lock
     verify_mon_folder
     update_monmap
     update_etcd_monmap boot&
+  fi
+
+  if [ -e "$MON_DATA_DIR/keyring" ]; then
+    get_mon_config
   fi
 }
