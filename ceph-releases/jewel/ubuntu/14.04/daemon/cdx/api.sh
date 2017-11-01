@@ -6,7 +6,7 @@
 
 function cdx_ceph_api {
   case $1 in
-    start_all_osds|stop_all_osds|restart_all_osds|get_active_osd_nums|run_osds)
+    start_all_osds|stop_all_osds|restart_all_osds|get_active_osd_nums|run_osds|get_osd_info)
       # Commands need docker
       source cdx/osd.sh
       check_osd_env

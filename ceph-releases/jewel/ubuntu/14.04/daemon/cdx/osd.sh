@@ -73,6 +73,19 @@ function restart_all_osds {
   "${DOCKER_CMD}" restart $("${DOCKER_CMD}" ps -q -f LABEL=CEPH=osd)
 }
 
+function get_osd_info {
+  local OSD_CONT_LIST=$("${DOCKER_CMD}" ps -q -f LABEL=CEPH=osd)
+  local J_FORM="{\"nodeName\":\"$(hostname)\",\"osd\":[]}"
+  local counter=0
+  for cont in ${OSD_CONT_LIST}; do
+    J_OBJ1=$("${DOCKER_CMD}" inspect -f '{"osd_id":{{json .Config.Labels.OSD_ID}},"dev_name":{{json .Config.Labels.DEV_NAME}}}' "${cont}")
+    J_OBJ2="{\"container_id\":\"${cont}\"}"
+    J_FORM=$(echo ${J_FORM} | jq ".osd[$counter] |= .+ ${J_OBJ1} + ${J_OBJ2}")
+    let counter=counter+1
+  done
+  echo $J_FORM
+}
+
 function start_all_osds {
   # get all avail disks
   local DISK_LIST=$(get_avail_disks)
