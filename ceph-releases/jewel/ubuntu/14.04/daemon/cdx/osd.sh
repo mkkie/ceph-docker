@@ -75,15 +75,26 @@ function restart_all_osds {
 
 function get_osd_info {
   local OSD_CONT_LIST=$("${DOCKER_CMD}" ps -q -f LABEL=CEPH=osd)
-  local J_FORM="{\"nodeName\":\"$(hostname)\",\"osd\":[]}"
+  local J_FORM="{\"nodeName\":\"$(hostname)\",\"osd\":[],\"avalDisks\":[]}"
   local counter=0
+  # osd info
+  local J_OBJ1
+  local J_OBJ2
   for cont in ${OSD_CONT_LIST}; do
-    J_OBJ1=$("${DOCKER_CMD}" inspect -f '{"osd_id":{{json .Config.Labels.OSD_ID}},"dev_name":{{json .Config.Labels.DEV_NAME}}}' "${cont}")
-    J_OBJ2="{\"container_id\":\"${cont}\"}"
+    J_OBJ1=$("${DOCKER_CMD}" inspect -f '{"osdId":{{json .Config.Labels.OSD_ID}},"devName":{{json .Config.Labels.DEV_NAME}}}' "${cont}")
+    J_OBJ2="{\"containerId\":\"${cont}\"}"
     J_FORM=$(echo ${J_FORM} | jq ".osd[$counter] |= .+ ${J_OBJ1} + ${J_OBJ2}")
     let counter=counter+1
   done
-  echo $J_FORM
+  # disk info
+  counter=0
+  local J_DISK
+  for disk in $(get_disks | jq --raw-output .avalDisk); do
+    J_DISK="\"${disk}\""
+    J_FORM=$(echo ${J_FORM} | jq ".avalDisks[$counter] |= .+ ${J_DISK}")
+    let counter=counter+1
+  done
+  echo "${J_FORM}"
 }
 
 function start_all_osds {
@@ -335,20 +346,30 @@ function is_osd_disk {
 
 # Find disks not only unmounted but also non-ceph disks
 function get_avail_disks {
-  BLOCKS=$(readlink /sys/class/block/* -e | grep -v "usb" | grep -o "sd[a-z]$")
+  local AVAL_D=$(get_disks | jq --raw-output .avalDisk)
+  for disk in ${AVAL_D}; do
+    echo "/dev/${disk}"
+  done
+}
+
+function get_disks {
+  local BLOCKS=$(readlink /sys/class/block/* -e | grep -v "usb" | grep -o "sd[a-z]$")
   [[ -n "${BLOCKS}" ]] || ( echo "" ; return 1 )
-
-  while read disk ; do
-    # Double check it
-    if ! lsblk /dev/"${disk}" &> /dev/null; then
-      continue
-    fi
-
+  local SYS_D=""
+  local USB_D=$(readlink /sys/class/block/* -e | grep "usb" | grep -o "[sv]d[a-z]$" || true)
+  local AVAL_D=""
+  for disk in ${BLOCKS}; do
     if [ -z "$(lsblk /dev/"${disk}" -no MOUNTPOINT)" ]; then
-      # Found it
-      echo "/dev/${disk}"
+      AVAL_D="${AVAL_D} ${disk}"
+    else
+      SYS_D="${SYS_D} ${disk}"
     fi
-  done < <(echo "$BLOCKS")
+  done
+  # Remove space in the begining
+  AVAL_D=$(echo ${AVAL_D} | sed 's/" /"/')
+  SYS_D=$(echo ${SYS_D} | sed 's/" /"/')
+  local J_FORM="{\"systemDisk\":\"${SYS_D}\",\"usbDisk\":\"${USB_D}\",\"avalDisk\":\"${AVAL_D}\"}"
+  echo ${J_FORM}
 }
 
 function hotplug_OSD {
