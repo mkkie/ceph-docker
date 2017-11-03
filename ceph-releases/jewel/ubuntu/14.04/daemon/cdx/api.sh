@@ -6,13 +6,13 @@
 
 function cdx_ceph_api {
   case $1 in
-    start_all_osds|stop_all_osds|restart_all_osds|get_active_osd_nums|run_osds|get_osd_info)
+    start_all_osds|stop_all_osds|restart_all_osds|get_active_osd_nums|run_osds|get_osd_info|start_osd|stop_osd)
       # Commands need docker
       source cdx/osd.sh
       check_osd_env
       $@
       ;;
-    set_max_mon|get_max_mon|set_max_osd|get_max_osd|fix_monitor|ceph_verify)
+    set_max_mon|get_max_mon|set_max_osd|get_max_osd|fix_monitor|ceph_verify|osd_overview|set_all_replica|start_osd|stop_osd)
       # Commands in this script
       $@
       ;;
@@ -143,4 +143,70 @@ function ceph_verify {
   else
     log "ERROR- Kubenetes controller not exists."
   fi
+}
+
+function osd_overview {
+  local O_POD=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" get pod 2>/dev/null | awk '/ceph-osd-/ {print $1}')
+  local J_FORM="{\"data\":{\"balanceStatus\":\"\",\"estimate_balance_time\":\"\",\"nodes\":[]}}"
+
+  # get balance info
+  source cdx/balance.sh
+  local BAL_INFO=$(cacl_balance)
+  local MOV_LIST=$(echo ${BAL_INFO} | jq --raw-output ".addable")
+  local ADD_LIST=$(echo ${BAL_INFO} | jq --raw-output ".movable")
+  local BAL_STAT=$(echo ${BAL_INFO} | jq --raw-output ".balance")
+
+  local counter=0
+  for osd_pod in ${O_POD}; do
+    local MOVE_STAT=""
+    local J_NODE=$(osd_pod_info_json ${osd_pod})
+    local NODE_NAME=$(echo ${J_NODE} | jq --raw-output ".nodeName")
+    if echo "${MOV_LIST}" | grep -q "${NODE_NAME}"; then
+      local MOVE_STAT="{\"moveDisk\":\"true\"}"
+    else
+      local MOVE_STAT="{\"moveDisk\":\"false\"}"
+    fi
+    J_FORM=$(echo ${J_FORM} | jq ".data.nodes[$counter] |= .+ ${J_NODE} + ${MOVE_STAT}")
+    let counter=counter+1
+  done
+
+  if [ "${BAL_STAT}" == "true" ]; then
+    J_FORM=$(echo ${J_FORM} | jq ".data.balanceStatus |= .+ \"balance\"")
+  else
+    J_FORM=$(echo ${J_FORM} | jq ".data.balanceStatus |= .+ \"inbalance\"")
+  fi
+
+  echo ${J_FORM}
+}
+
+function osd_pod_info_json {
+  local OSD_POD=${1}
+  local J_NODE_INFO=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" exec "${OSD_POD}" ceph-api get_osd_info 2>/dev/null)
+  local NODE_NAME=$(echo ${J_NODE_INFO} | jq --raw-output ".nodeName")
+  local AVAL_DISK=$(echo ${J_NODE_INFO} | jq --raw-output ".avalDisks[]" | sed 's/\/dev\///')
+  local ACT_DISK=$(echo ${J_NODE_INFO} | jq --raw-output ".osd[].devName" | sed 's/\/dev\///')
+
+  for disk in ${AVAL_DISK}; do
+    if echo "${ACT_DISK}" | grep -q -v "${disk}"; then
+      local INACT_DISK="${INACT_DISK} ${disk}"
+    fi
+  done
+
+  # make json form { "nodeName": "node-331010", "active": "sdb,sdc", "inactive": "sdd,sde"}
+  local J_ACT_DISK=$(echo $ACT_DISK | sed 's/ /,/')
+  local J_INACT_DISK=$(echo $INACT_DISK | sed 's/ /,/')
+  local J_FORM="{\"nodeName\":\"${NODE_NAME}\",\"active\":\"${J_ACT_DISK}\",\"inactive\":\"${J_INACT_DISK}\"}"
+  echo ${J_FORM}
+}
+
+function set_all_replica {
+  echo "set_all_replica"
+}
+
+function stop_osd {
+  echo "stop_osd"
+}
+
+function start_osd {
+  echo "start_osd"
 }
