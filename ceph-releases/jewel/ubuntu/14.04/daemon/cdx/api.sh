@@ -152,8 +152,8 @@ function osd_overview {
   # get balance info
   source cdx/balance.sh
   local BAL_INFO=$(cacl_balance)
-  local MOV_LIST=$(echo ${BAL_INFO} | jq --raw-output ".addable")
-  local ADD_LIST=$(echo ${BAL_INFO} | jq --raw-output ".movable")
+  local ADD_LIST=$(echo ${BAL_INFO} | jq --raw-output ".addable")
+  local MOV_LIST=$(echo ${BAL_INFO} | jq --raw-output ".movable")
   local BAL_STAT=$(echo ${BAL_INFO} | jq --raw-output ".balance")
 
   local counter=0
