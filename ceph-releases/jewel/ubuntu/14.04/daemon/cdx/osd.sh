@@ -90,7 +90,7 @@ function get_osd_info {
   counter=0
   local J_DISK
   for disk in $(get_disks | jq --raw-output .avalDisk); do
-    J_DISK="\"${disk}\""
+    J_DISK="\"/dev/${disk}\""
     J_FORM=$(echo ${J_FORM} | jq ".avalDisks[$counter] |= .+ ${J_DISK}")
     let counter=counter+1
   done
