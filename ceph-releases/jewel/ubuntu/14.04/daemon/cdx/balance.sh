@@ -1,7 +1,7 @@
 #!/bin/bash
 
 function cacl_balance {
-  local NODE_JSON=$(ceph osd tree -f json | jq --raw-output '.nodes | .[] | select(.type=="host")  | {name}+{children}')
+  local NODE_JSON=$(ceph "${CLI_OPTS[@]}" osd tree -f json | jq --raw-output '.nodes | .[] | select(.type=="host")  | {name}+{children}')
   local NODE_LIST=$(echo "${NODE_JSON}" | jq --raw-output .name)
   local NODES=$(echo "${NODE_LIST}" | wc -w)
   local NODE_OSD_NUM=$(echo "${NODE_JSON}" | jq '{"name": (.name), "number": (.children | length)}')

@@ -4,6 +4,7 @@ function cdx_controller {
   etcdctl "${ETCDCTL_OPTS[@]}" "${KV_TLS[@]}" mkdir "${CLUSTER_PATH}" &>/dev/null || true
   etcdctl "${ETCDCTL_OPTS[@]}" "${KV_TLS[@]}" mkdir "${CLUSTER_PATH}"/mon_host &>/dev/null || true
   etcdctl "${ETCDCTL_OPTS[@]}" "${KV_TLS[@]}" mk "${CLUSTER_PATH}"/max_mon "${MAX_MON}" &>/dev/null || true
+  get_ceph_admin force &>/dev/null
 
   while [ true ]; do
     controller_main
