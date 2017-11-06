@@ -156,7 +156,7 @@ function osd_overview {
     return 1
   fi
   local O_POD=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" get pod 2>/dev/null | awk '/ceph-osd-/ {print $1}')
-  local J_FORM="{\"data\":{\"balanceStatus\":\"\",\"estimate_balance_time\":\"\",\"nodes\":[]}}"
+  local J_FORM="{\"data\":{\"balanceStatus\":\"\",\"estimateBalanceTime\":\"\",\"nodes\":[]}}"
 
   # get balance info
   source cdx/balance.sh
