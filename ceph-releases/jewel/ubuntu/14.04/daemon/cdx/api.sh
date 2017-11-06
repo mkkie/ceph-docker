@@ -151,6 +151,10 @@ function ceph_verify {
 }
 
 function osd_overview {
+  if ! timeout 10 ceph "${CLI_OPTS[@]}" health &>/dev/null; then
+    echo "Ceph Cluster isn't ready. Please try again later."
+    return 1
+  fi
   local O_POD=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" get pod 2>/dev/null | awk '/ceph-osd-/ {print $1}')
   local J_FORM="{\"data\":{\"balanceStatus\":\"\",\"estimate_balance_time\":\"\",\"nodes\":[]}}"
 
@@ -164,7 +168,7 @@ function osd_overview {
   local counter=0
   for osd_pod in ${O_POD}; do
     local MOVE_STAT=""
-    local NODE_NAME=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" exec "${OSD_POD}" hostname 2>/dev/null)
+    local NODE_NAME=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" exec "${osd_pod}" hostname 2>/dev/null)
     NODE_NAME="{\"nodeName\":\"${NODE_NAME}\"}"
     if echo "${MOV_LIST}" | grep -q "${NODE_NAME}"; then
       local MOVE_STAT="{\"moveDisk\":\"true\"}"
