@@ -25,6 +25,7 @@ function cacl_balance {
   local OSD_DIFF=$(expr "${MAX_OSD}" - "${MIN_OSD}")
   local ADD_LIST
   local MOV_LIST
+  local counter=0
 
   if [ "${NODES}" == "${MAX_NODE}" ]; then
     ADD_LIST="${MAX_LIST}"

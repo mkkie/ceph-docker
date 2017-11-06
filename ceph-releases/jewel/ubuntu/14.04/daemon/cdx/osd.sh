@@ -1,6 +1,7 @@
 #!/bin/bash
 
 source cdx/crush.sh
+source cdx/osd-api.sh
 
 function check_osd_env {
   check_docker_cmd
@@ -63,38 +64,6 @@ function run_osds {
 
 function get_active_osd_nums {
   "${DOCKER_CMD}" ps -q -f LABEL=CEPH=osd | wc -l
-}
-
-function stop_all_osds {
-  "${DOCKER_CMD}" stop $("${DOCKER_CMD}" ps -q -f LABEL=CEPH=osd)
-}
-
-function restart_all_osds {
-  "${DOCKER_CMD}" restart $("${DOCKER_CMD}" ps -q -f LABEL=CEPH=osd)
-}
-
-function get_osd_info {
-  local OSD_CONT_LIST=$("${DOCKER_CMD}" ps -q -f LABEL=CEPH=osd)
-  local J_FORM="{\"nodeName\":\"$(hostname)\",\"osd\":[],\"avalDisks\":[]}"
-  local counter=0
-  # osd info
-  local J_OBJ1
-  local J_OBJ2
-  for cont in ${OSD_CONT_LIST}; do
-    J_OBJ1=$("${DOCKER_CMD}" inspect -f '{"osdId":{{json .Config.Labels.OSD_ID}},"devName":{{json .Config.Labels.DEV_NAME}}}' "${cont}")
-    J_OBJ2="{\"containerId\":\"${cont}\"}"
-    J_FORM=$(echo ${J_FORM} | jq ".osd[$counter] |= .+ ${J_OBJ1} + ${J_OBJ2}")
-    let counter=counter+1
-  done
-  # disk info
-  counter=0
-  local J_DISK
-  for disk in $(get_disks | jq --raw-output .avalDisk); do
-    J_DISK="\"/dev/${disk}\""
-    J_FORM=$(echo ${J_FORM} | jq ".avalDisks[$counter] |= .+ ${J_DISK}")
-    let counter=counter+1
-  done
-  echo "${J_FORM}"
 }
 
 function start_all_osds {
