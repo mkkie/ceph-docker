@@ -167,15 +167,17 @@ function osd_overview {
 
   local counter=0
   for osd_pod in ${O_POD}; do
-    local MOVE_STAT=""
-    local NODE_NAME=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" exec "${osd_pod}" hostname 2>/dev/null)
-    NODE_NAME="{\"nodeName\":\"${NODE_NAME}\"}"
+    local J_NODE_STAT=""
+    local NODE_NAME=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" get pod  "${osd_pod}" -o custom-columns='NODE:.spec.nodeName' --no-headers 2>/dev/null)
+    J_NODE_NAME="{\"nodeName\":\"${NODE_NAME}\"}"
     if echo "${MOV_LIST}" | grep -q "${NODE_NAME}"; then
-      local MOVE_STAT="{\"moveDisk\":\"true\"}"
+      local J_NODE_STAT="{\"moveDisk\":true}"
+    elif echo "${ADD_LIST}" | grep -q "${NODE_NAME}"; then
+      local J_NODE_STAT="{\"addDisk\":true}"
     else
-      local MOVE_STAT="{\"moveDisk\":\"false\"}"
+      local J_NODE_STAT="{}"
     fi
-    J_FORM=$(echo ${J_FORM} | jq ".data.nodes[$counter] |= .+ ${NODE_NAME} + ${MOVE_STAT}")
+    J_FORM=$(echo ${J_FORM} | jq ".data.nodes[$counter] |= .+ ${J_NODE_NAME} + ${J_NODE_STAT}")
     let counter=counter+1
   done
 
