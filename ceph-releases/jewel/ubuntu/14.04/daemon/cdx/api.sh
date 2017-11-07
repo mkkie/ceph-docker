@@ -204,19 +204,15 @@ function stop_osd {
     echo "ERROR"
     return 2
   fi
-  local O_POD=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" get pod 2>/dev/null | awk '/ceph-osd-/ {print $1}')
-  for osd_pod in ${O_POD}; do
-    local NODE_NAME=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" exec "${osd_pod}" hostname 2>/dev/null)
-    if [ "${NODE_NAME}" == "${NODE}" ]; then
-      kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" exec "${osd_pod}" ceph-api stop_a_osd "${DISK}"
-      break
-    fi
-  done
+  local PODS=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" get pod -o custom-columns='NAME:.metadata.name,NODE:.spec.nodeName' --no-headers)
+  local O_POD=$(printf "${PODS}" | grep "${NODE}" | awk '/ceph-osd-/ {print $1}')
+  kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" exec "${O_POD}" ceph-api stop_a_osd "${DISK}"
 }
 
 function start_osd {
   local NODE=${1}
   local DISK=${2}
+  local ACT=${3}
   if [ -z "${NODE}" ]; then
     echo "ERROR"
     return 1
@@ -224,13 +220,8 @@ function start_osd {
     echo "ERROR"
     return 2
   fi
-  local O_POD=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" get pod 2>/dev/null | awk '/ceph-osd-/ {print $1}')
-  for osd_pod in ${O_POD}; do
-    local NODE_NAME=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" exec "${osd_pod}" hostname 2>/dev/null)
-    if [ "${NODE_NAME}" == "${NODE}" ]; then
-      kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" exec "${osd_pod}" ceph-api start_or_create_a_osd "${DISK}"
-      break
-    fi
-  done
+  local PODS=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" get pod -o custom-columns='NAME:.metadata.name,NODE:.spec.nodeName' --no-headers)
+  local O_POD=$(printf "${PODS}" | grep "${NODE}" | awk '/ceph-osd-/ {print $1}')
+  kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" exec "${O_POD}" ceph-api start_or_create_a_osd "${DISK}" "${ACT}"
 }
 
