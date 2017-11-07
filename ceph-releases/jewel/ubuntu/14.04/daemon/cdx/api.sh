@@ -156,7 +156,7 @@ function osd_overview {
     return 1
   fi
   local O_POD=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" get pod 2>/dev/null | awk '/ceph-osd-/ {print $1}')
-  local J_FORM="{\"data\":{\"balanceStatus\":\"\",\"estimate_balance_time\":\"\",\"nodes\":[]}}"
+  local J_FORM="{\"data\":{\"balanceStatus\":\"\",\"estimateBalanceTime\":\"\",\"nodes\":[]}}"
 
   # get balance info
   source cdx/balance.sh
@@ -165,6 +165,7 @@ function osd_overview {
   local MOV_LIST=$(echo ${BAL_INFO} | jq --raw-output ".movable")
   local BAL_STAT=$(echo ${BAL_INFO} | jq --raw-output ".balance")
 
+  # disk info
   local counter=0
   for osd_pod in ${O_POD}; do
     local J_NODE_STAT=""
@@ -181,11 +182,17 @@ function osd_overview {
     let counter=counter+1
   done
 
+  # balance info
   if [ "${BAL_STAT}" == "true" ]; then
     J_FORM=$(echo ${J_FORM} | jq ".data.balanceStatus |= .+ \"balance\"")
   else
     J_FORM=$(echo ${J_FORM} | jq ".data.balanceStatus |= .+ \"inbalance\"")
   fi
+
+  # recovery info
+  source cdx/recovery-time.sh
+  local TIME=$(cacl_recovery_time)
+  J_FORM=$(echo ${J_FORM} | jq ".data.estimateBalanceTime |= .+ \"${TIME}\"")
 
   echo ${J_FORM}
 }
