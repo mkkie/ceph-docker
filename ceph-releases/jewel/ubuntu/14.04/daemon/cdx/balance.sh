@@ -36,8 +36,6 @@ function cacl_balance {
     for node in ${MAX_LIST}; do
       if [ "${counter}" -lt "1" ]; then
         MOV_LIST="${node}"
-      else
-        ADD_LIST="${ADD_LIST} ${node}"
       fi
       let counter=counter+1
     done
