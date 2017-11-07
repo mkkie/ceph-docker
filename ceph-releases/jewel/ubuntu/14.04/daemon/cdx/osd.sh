@@ -17,6 +17,7 @@ function check_osd_env {
     OSD_CPU_CORE=()
   fi
   etcdctl "${ETCDCTL_OPTS[@]}" "${KV_TLS[@]}" mk "${CLUSTER_PATH}"/max_osd "${MAX_OSD}" &>/dev/null || true
+  ceph "${CLI_OPTS[@]}" osd crush add-bucket "${HOSTNAME}" host &>/dev/null
 }
 
 function check_docker_cmd {
