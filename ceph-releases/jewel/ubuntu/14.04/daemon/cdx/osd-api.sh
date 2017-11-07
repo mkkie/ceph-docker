@@ -20,16 +20,32 @@ function start_or_create_a_osd {
   if is_osd_running "${DISK}"; then
     echo "SUCCESS"
   elif [ "${ACT}" == "zap" ]; then
-    prepare_new_osd "${DISK}" &>/dev/null
-    activate_osd "${DISK}" &>/dev/null
-    echo "CREATE"
+    if ! prepare_new_osd "${DISK}" &>/dev/null; then
+      echo "FAILED"
+      return 21
+    elif ! activate_osd "${DISK}" &>/dev/null; then
+      echo "FAILED"
+      return 22
+    else
+      echo "SUCCESS"
+    fi
   elif is_osd_disk "${DISK}"; then
-    activate_osd "${DISK}" &>/dev/null
-    echo "SUCCESS"
+    if ! activate_osd "${DISK}" &>/dev/null; then
+      echo "FAILED"
+      return 23
+    else
+      echo "SUCCESS"
+    fi
   else
-    prepare_new_osd "${DISK}" &>/dev/null
-    activate_osd "${DISK}" &>/dev/null
-    echo "CREATE"
+    if ! prepare_new_osd "${DISK}" &>/dev/null; then
+      echo "FAILED"
+      return 24
+    elif ! activate_osd "${DISK}" &>/dev/null; then
+      echo "FAILED"
+      return 25
+    else
+      echo "SUCCESS"
+    fi
   fi
 }
 
