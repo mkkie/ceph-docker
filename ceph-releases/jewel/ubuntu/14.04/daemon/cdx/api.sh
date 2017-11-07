@@ -167,15 +167,17 @@ function osd_overview {
 
   local counter=0
   for osd_pod in ${O_POD}; do
-    local MOVE_STAT=""
-    local NODE_NAME=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" exec "${osd_pod}" hostname 2>/dev/null)
-    NODE_NAME="{\"nodeName\":\"${NODE_NAME}\"}"
+    local J_NODE_STAT=""
+    local NODE_NAME=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" get pod  "${osd_pod}" -o custom-columns='NODE:.spec.nodeName' --no-headers 2>/dev/null)
+    J_NODE_NAME="{\"nodeName\":\"${NODE_NAME}\"}"
     if echo "${MOV_LIST}" | grep -q "${NODE_NAME}"; then
-      local MOVE_STAT="{\"moveDisk\":\"true\"}"
+      local J_NODE_STAT="{\"moveDisk\":true}"
+    elif echo "${ADD_LIST}" | grep -q "${NODE_NAME}"; then
+      local J_NODE_STAT="{\"addDisk\":true}"
     else
-      local MOVE_STAT="{\"moveDisk\":\"false\"}"
+      local J_NODE_STAT="{}"
     fi
-    J_FORM=$(echo ${J_FORM} | jq ".data.nodes[$counter] |= .+ ${NODE_NAME} + ${MOVE_STAT}")
+    J_FORM=$(echo ${J_FORM} | jq ".data.nodes[$counter] |= .+ ${J_NODE_NAME} + ${J_NODE_STAT}")
     let counter=counter+1
   done
 
@@ -189,7 +191,46 @@ function osd_overview {
 }
 
 function set_all_replica {
-  echo "set_all_replica"
+  if ! timeout 10 ceph "${CLI_OPTS[@]}" health &>/dev/null; then
+    echo "Ceph Cluster isn't ready. Please try again later."
+    return 1
+  fi
+  local EXP_SIZE=${1}
+  if [ -z "${EXP_SIZE}" ]; then
+    echo "FAILED"
+    return 2
+  elif ! positive_num "${EXP_SIZE}"; then
+    echo "FAILED"
+    return 3
+  fi
+  local POOL_JSON=$(ceph "${CLI_OPTS[@]}" osd pool ls detail -f json 2>/dev/null)
+  local ALL_POOLS=$(echo "${POOL_JSON}"  | jq --raw-output .[].pool_name)
+  local CUR_SIZE=$(echo "${POOL_JSON}"  | jq --raw-output .[0].size)
+
+ # check nodes
+  local NODE_JSON=$(ceph "${CLI_OPTS[@]}" osd tree -f json | jq --raw-output '.nodes | .[] | select(.type=="host")  | {name}+{children}')
+  local NODE_LIST=$(echo "${NODE_JSON}" | jq --raw-output .name)
+  local NODES=$(echo "${NODE_LIST}" | wc -w)
+  if [ "${EXP_SIZE}" -gt "${NODES}" ]; then
+    echo "FAILED"
+    return 4
+  fi
+
+  # check space
+  local SPACE_JSON=$(ceph "${CLI_OPTS[@]}" df -f json 2>/dev/null)
+  local USED_SPACE=$(echo "${SPACE_JSON}" | jq .stats.total_used_bytes)
+  local AVAL_SPACE=$(echo "${SPACE_JSON}" | jq .stats.total_avail_bytes)
+  local EXP_SPACE=$(expr "${USED_SPACE}" "/" "${CUR_SIZE}" "*" "${EXP_SIZE}")
+  if [ "${AVAL_SPACE}" -lt "${EXP_SPACE}" ]; then
+    echo "FAILED"
+    return 5
+  fi
+
+  for pool in ${ALL_POOLS}; do
+    ceph "${CLI_OPTS[@]}" osd pool set "${pool}" size "${EXP_SIZE}" &>/dev/null
+  done
+  echo "SUCCESS"
+
 }
 
 function stop_osd {
@@ -202,19 +243,15 @@ function stop_osd {
     echo "ERROR"
     return 2
   fi
-  local O_POD=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" get pod 2>/dev/null | awk '/ceph-osd-/ {print $1}')
-  for osd_pod in ${O_POD}; do
-    local NODE_NAME=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" exec "${osd_pod}" hostname 2>/dev/null)
-    if [ "${NODE_NAME}" == "${NODE}" ]; then
-      kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" exec "${osd_pod}" ceph-api stop_a_osd "${DISK}"
-      break
-    fi
-  done
+  local PODS=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" get pod -o custom-columns='NAME:.metadata.name,NODE:.spec.nodeName' --no-headers)
+  local O_POD=$(printf "${PODS}" | grep "${NODE}" | awk '/ceph-osd-/ {print $1}')
+  kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" exec "${O_POD}" ceph-api stop_a_osd "${DISK}"
 }
 
 function start_osd {
   local NODE=${1}
   local DISK=${2}
+  local ACT=${3}
   if [ -z "${NODE}" ]; then
     echo "ERROR"
     return 1
@@ -222,13 +259,8 @@ function start_osd {
     echo "ERROR"
     return 2
   fi
-  local O_POD=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" get pod 2>/dev/null | awk '/ceph-osd-/ {print $1}')
-  for osd_pod in ${O_POD}; do
-    local NODE_NAME=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" exec "${osd_pod}" hostname 2>/dev/null)
-    if [ "${NODE_NAME}" == "${NODE}" ]; then
-      kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" exec "${osd_pod}" ceph-api start_or_create_a_osd "${DISK}"
-      break
-    fi
-  done
+  local PODS=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" get pod -o custom-columns='NAME:.metadata.name,NODE:.spec.nodeName' --no-headers)
+  local O_POD=$(printf "${PODS}" | grep "${NODE}" | awk '/ceph-osd-/ {print $1}')
+  kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" exec "${O_POD}" ceph-api start_or_create_a_osd "${DISK}" "${ACT}"
 }
 
