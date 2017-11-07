@@ -18,6 +18,8 @@ function check_osd_env {
   fi
   etcdctl "${ETCDCTL_OPTS[@]}" "${KV_TLS[@]}" mk "${CLUSTER_PATH}"/max_osd "${MAX_OSD}" &>/dev/null || true
   ceph "${CLI_OPTS[@]}" osd crush add-bucket "${HOSTNAME}" host &>/dev/null
+  # XXX: need more flexiable
+  ceph "${CLI_OPTS[@]}" osd crush move "${HOSTNAME}" root=default &>/dev/null
 }
 
 function check_docker_cmd {
