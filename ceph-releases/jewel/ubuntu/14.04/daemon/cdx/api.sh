@@ -151,11 +151,11 @@ function ceph_verify {
 }
 
 function osd_overview {
-  if ! timeout 10 ceph "${CLI_OPTS[@]}" health &>/dev/null; then
+  if [ ! -e "${ADMIN_KEYRING}" ]; then
     echo "Ceph Cluster isn't ready. Please try again later."
     return 1
   fi
-  local O_POD=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" get pod 2>/dev/null | awk '/ceph-osd-/ {print $1}')
+  local OSD_NAME_LIST=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" get pod -o custom-columns='NAME:.metadata.name,NODE:.spec.nodeName' --no-headers 2>/dev/null | awk '/ceph-osd-/ {print $2}')
   local J_FORM="{\"data\":{\"balanceStatus\":\"\",\"estimateBalanceTime\":\"\",\"nodes\":[]}}"
 
   # get balance info
@@ -167,13 +167,12 @@ function osd_overview {
 
   # disk info
   local counter=0
-  for osd_pod in ${O_POD}; do
+  for osd_name in ${OSD_NAME_LIST}; do
     local J_NODE_STAT=""
-    local NODE_NAME=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" get pod  "${osd_pod}" -o custom-columns='NODE:.spec.nodeName' --no-headers 2>/dev/null)
-    J_NODE_NAME="{\"nodeName\":\"${NODE_NAME}\"}"
-    if echo "${MOV_LIST}" | grep -q "${NODE_NAME}"; then
+    J_NODE_NAME="{\"nodeName\":\"${osd_name}\"}"
+    if echo "${MOV_LIST}" | grep -q "${osd_name}"; then
       local J_NODE_STAT="{\"moveDisk\":true}"
-    elif echo "${ADD_LIST}" | grep -q "${NODE_NAME}"; then
+    elif echo "${ADD_LIST}" | grep -q "${osd_name}"; then
       local J_NODE_STAT="{\"addDisk\":true}"
     else
       local J_NODE_STAT="{}"
