@@ -9,14 +9,14 @@ function cdx_ceph_api {
     start_all_osds|stop_all_osds|restart_all_osds|get_osd_info|start_or_create_a_osd|stop_a_osd)
       # Commands need docker
       source cdx/osd.sh
-      check_osd_env
+      check_docker_cmd
       $@
       ;;
     set_max_mon|get_max_mon|set_max_osd|get_max_osd|fix_monitor|ceph_verify)
       # Commands in this script part 1
       $@
       ;;
-    osd_overview|set_all_replica|start_osd|stop_osd)
+    osd_overview|check_replica_avail|set_all_replica|start_osd|stop_osd)
       # Commands in this script part 2
       $@
       ;;
@@ -151,11 +151,11 @@ function ceph_verify {
 }
 
 function osd_overview {
-  if ! timeout 10 ceph "${CLI_OPTS[@]}" health &>/dev/null; then
+  if [ ! -e "${ADMIN_KEYRING}" ]; then
     echo "Ceph Cluster isn't ready. Please try again later."
     return 1
   fi
-  local O_POD=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" get pod 2>/dev/null | awk '/ceph-osd-/ {print $1}')
+  local OSD_NAME_LIST=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" get pod -o custom-columns='NAME:.metadata.name,NODE:.spec.nodeName' --no-headers 2>/dev/null | awk '/ceph-osd-/ {print $2}')
   local J_FORM="{\"data\":{\"balanceStatus\":\"\",\"estimateBalanceTime\":\"\",\"nodes\":[]}}"
 
   # get balance info
@@ -167,13 +167,12 @@ function osd_overview {
 
   # disk info
   local counter=0
-  for osd_pod in ${O_POD}; do
+  for osd_name in ${OSD_NAME_LIST}; do
     local J_NODE_STAT=""
-    local NODE_NAME=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" get pod  "${osd_pod}" -o custom-columns='NODE:.spec.nodeName' --no-headers 2>/dev/null)
-    J_NODE_NAME="{\"nodeName\":\"${NODE_NAME}\"}"
-    if echo "${MOV_LIST}" | grep -q "${NODE_NAME}"; then
+    J_NODE_NAME="{\"nodeName\":\"${osd_name}\"}"
+    if echo "${MOV_LIST}" | grep -q "${osd_name}"; then
       local J_NODE_STAT="{\"moveDisk\":true}"
-    elif echo "${ADD_LIST}" | grep -q "${NODE_NAME}"; then
+    elif echo "${ADD_LIST}" | grep -q "${osd_name}"; then
       local J_NODE_STAT="{\"addDisk\":true}"
     else
       local J_NODE_STAT="{}"
@@ -197,21 +196,20 @@ function osd_overview {
   echo ${J_FORM}
 }
 
-function set_all_replica {
-  if ! timeout 10 ceph "${CLI_OPTS[@]}" health &>/dev/null; then
-    echo "Ceph Cluster isn't ready. Please try again later."
+function check_replica_avail {
+  if [ ! -e "${ADMIN_KEYRING}" ]; then
+    >&2 echo "Ceph Cluster isn't ready. Please try again later."
     return 1
   fi
   local EXP_SIZE=${1}
   if [ -z "${EXP_SIZE}" ]; then
-    echo "FAILED"
+    >&2 echo "FALSE"
     return 2
   elif ! positive_num "${EXP_SIZE}"; then
-    echo "FAILED"
+    >&2 echo "FALSE"
     return 3
   fi
   local POOL_JSON=$(ceph "${CLI_OPTS[@]}" osd pool ls detail -f json 2>/dev/null)
-  local ALL_POOLS=$(echo "${POOL_JSON}"  | jq --raw-output .[].pool_name)
   local CUR_SIZE=$(echo "${POOL_JSON}"  | jq --raw-output .[0].size)
 
  # check nodes
@@ -219,7 +217,7 @@ function set_all_replica {
   local NODE_LIST=$(echo "${NODE_JSON}" | jq --raw-output .name)
   local NODES=$(echo "${NODE_LIST}" | wc -w)
   if [ "${EXP_SIZE}" -gt "${NODES}" ]; then
-    echo "FAILED"
+    >&2 echo "FALSE"
     return 4
   fi
 
@@ -229,10 +227,18 @@ function set_all_replica {
   local AVAL_SPACE=$(echo "${SPACE_JSON}" | jq .stats.total_avail_bytes)
   local EXP_SPACE=$(expr "${USED_SPACE}" "/" "${CUR_SIZE}" "*" "${EXP_SIZE}")
   if [ "${AVAL_SPACE}" -lt "${EXP_SPACE}" ]; then
-    echo "FAILED"
+    >&2 echo "FALSE"
     return 5
   fi
 
+  echo "TRUE"
+}
+
+function set_all_replica {
+  local EXP_SIZE=${1}
+  check_replica_avail "${EXP_SIZE}" >/dev/null
+  local POOL_JSON=$(ceph "${CLI_OPTS[@]}" osd pool ls detail -f json 2>/dev/null)
+  local ALL_POOLS=$(echo "${POOL_JSON}"  | jq --raw-output .[].pool_name)
   for pool in ${ALL_POOLS}; do
     ceph "${CLI_OPTS[@]}" osd pool set "${pool}" size "${EXP_SIZE}" &>/dev/null
   done
