@@ -9,7 +9,7 @@ function cdx_ceph_api {
     start_all_osds|stop_all_osds|restart_all_osds|get_osd_info|start_or_create_a_osd|stop_a_osd)
       # Commands need docker
       source cdx/osd.sh
-      check_osd_env
+      check_docker_cmd
       $@
       ;;
     set_max_mon|get_max_mon|set_max_osd|get_max_osd|fix_monitor|ceph_verify)
