@@ -156,7 +156,7 @@ function ceph_verify {
 
 function osd_overview {
   if [ ! -e "${ADMIN_KEYRING}" ]; then
-    echo "Ceph Cluster isn't ready. Please try again later."
+    echo "CEPH CLUSTER NOT READY"
     return 1
   fi
   local OSD_NAME_LIST=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" get pod -o custom-columns='NAME:.metadata.name,NODE:.spec.nodeName' --no-headers 2>/dev/null | awk '/ceph-osd-/ {print $2}')
