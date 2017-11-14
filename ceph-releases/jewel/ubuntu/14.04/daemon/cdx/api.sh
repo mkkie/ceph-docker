@@ -281,15 +281,35 @@ function start_osd {
 }
 
 function check_leaf_avail {
+  # support osd & host.
+  local EXP_LEAF=${1}
   local REPLICA=$(ceph "${CLI_OPTS[@]}" osd pool ls detail -f json 2>/dev/null | jq --raw-output .[0].size)
   local NODE_JSON=$(ceph "${CLI_OPTS[@]}" osd tree -f json | jq --raw-output '.nodes[] | select(.type=="host") | {"name": (.name), "number": (.children | length)}')
   local AVAL_NODES=$(echo "${NODE_JSON}" | jq --raw-output ' . | select(.number>0) | .name' | wc -w)
 
   if [ "${AVAL_NODES}" -ge "${REPLICA}" ]; then
-    echo "HOST"
+    local AVAL_LEAF="HOST"
   else
-    echo "OSD"
+    local AVAL_LEAF="OSD"
   fi
+
+  case ${EXP_LEAF} in
+    OSD)
+      echo "TRUE"
+      ;;
+    HOST)
+      if [ "${AVAL_LEAF}" == "OSD" ]; then
+        >&2 echo "NODES NOT ENOUGHT"
+        return 1
+      else
+        echo "TRUE"
+      fi
+      ;;
+    *)
+      >&2 echo "WRONG VALUE"
+      return 2
+      ;;
+  esac
 }
 
 function get_crush_leaf {
@@ -302,7 +322,7 @@ function get_crush_leaf {
       echo "OSD"
       ;;
     *)
-      >&2 echo "FALSE"
+      >&2 echo "PROGRAM ERROR"
       return 1
       ;;
   esac
@@ -310,15 +330,7 @@ function get_crush_leaf {
 
 function set_crush_leaf {
   local EXP_LEAF=${1}
-  local AVAIL_LEAF=$(check_leaf_avail)
-  local SET_LEAF=""
-  if [ "${EXP_LEAF}" != "OSD" ] && [ "${EXP_LEAF}" != "HOST" ]; then
-    >&2 echo "FALSE"
-    return 1
-  elif [ "${EXP_LEAF}" == "HOST" ] && [ "${AVAIL_LEAF}" == "OSD" ]; then
-    >&2 echo "FALSE"
-    return 2
-  fi
+  check_leaf_avail "${EXP_LEAF}" >/dev/null
 
   local POOL_JSON=$(ceph "${CLI_OPTS[@]}" osd pool ls detail -f json 2>/dev/null)
   local ALL_POOLS=$(echo "${POOL_JSON}"  | jq --raw-output .[].pool_name)
@@ -330,7 +342,7 @@ function set_crush_leaf {
       local CRUSH_RULE=0
       ;;
     *)
-      >&2 echo "FALSE"
+      >&2 echo "WRONG VALUE"
       ;;
     esac
 
