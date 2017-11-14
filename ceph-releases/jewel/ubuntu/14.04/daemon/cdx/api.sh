@@ -202,27 +202,31 @@ function osd_overview {
 
 function check_replica_avail {
   if [ ! -e "${ADMIN_KEYRING}" ]; then
-    >&2 echo "Ceph Cluster isn't ready. Please try again later."
+    >&2 echo "CEPH CLUSTER NOT READY"
     return 1
   fi
   local EXP_SIZE=${1}
   if [ -z "${EXP_SIZE}" ]; then
-    >&2 echo "FALSE"
+    >&2 echo "WRONG VALUE"
     return 2
   elif ! positive_num "${EXP_SIZE}"; then
-    >&2 echo "FALSE"
+    >&2 echo "WRONG VALUE"
     return 3
   fi
   local POOL_JSON=$(ceph "${CLI_OPTS[@]}" osd pool ls detail -f json 2>/dev/null)
   local CUR_SIZE=$(echo "${POOL_JSON}"  | jq --raw-output .[0].size)
+  local NODE_JSON=$(ceph "${CLI_OPTS[@]}" osd tree -f json 2>/dev/null)
+  local AVAL_NODES=$(echo "${NODE_JSON}" | jq --raw-output '.nodes[] | select(.type=="host") | {"name": (.name), "number": (.children| length)} | select(.number>0) | .name' | wc -w)
+  local AVAL_OSDS=$(echo "${NODE_JSON}" | jq --raw-output '.nodes[] | select(.type=="osd") | .name ' | wc -w)
 
- # check nodes
-  local NODE_JSON=$(ceph "${CLI_OPTS[@]}" osd tree -f json | jq --raw-output '.nodes | .[] | select(.type=="host")  | {name}+{children}')
-  local NODE_LIST=$(echo "${NODE_JSON}" | jq --raw-output .name)
-  local NODES=$(echo "${NODE_LIST}" | wc -w)
-  if [ "${EXP_SIZE}" -gt "${NODES}" ]; then
-    >&2 echo "FALSE"
+ # check crush leaf, nodes & osds
+  local CRUSH_LEAF=$(get_crush_leaf)
+  if [ "${CRUSH_LEAF}" == "HOST" ] && [ "${EXP_SIZE}" -gt "${AVAL_NODES}" ]; then
+    >&2 echo "NODES NOT ENOUGH"
     return 4
+  elif [ "${CRUSH_LEAF}" == "OSD" ] && [ "${EXP_SIZE}" -gt "${AVAL_OSDS}" ]; then
+    >&2 echo "OSDS NOT ENOUGH"
+    return 5
   fi
 
   # check space
@@ -231,11 +235,10 @@ function check_replica_avail {
   local AVAL_SPACE=$(echo "${SPACE_JSON}" | jq .stats.total_avail_bytes)
   local EXP_SPACE=$(expr "${USED_SPACE}" "/" "${CUR_SIZE}" "*" "${EXP_SIZE}")
   if [ "${AVAL_SPACE}" -lt "${EXP_SPACE}" ]; then
-    >&2 echo "FALSE"
-    return 5
+    >&2 echo "SPACE NOT ENOUGH"
+    return 6
   fi
-
-  echo "TRUE"
+  echo "SUCCESS"
 }
 
 function set_all_replica {
@@ -299,7 +302,7 @@ function check_leaf_avail {
       ;;
     HOST)
       if [ "${AVAL_LEAF}" == "OSD" ]; then
-        >&2 echo "NODES NOT ENOUGHT"
+        >&2 echo "NODES NOT ENOUGH"
         return 1
       else
         echo "TRUE"
