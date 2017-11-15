@@ -20,6 +20,10 @@ function cdx_ceph_api {
       # Commands in this script part 2
       $@
       ;;
+    get_crush_leaf|check_leaf_avail|set_crush_leaf)
+      # Commands in this script part 3
+      $@
+      ;;
     *)
       log "WARN- Wrong options. See function cdx_ceph_api."
       return 2
@@ -152,7 +156,7 @@ function ceph_verify {
 
 function osd_overview {
   if [ ! -e "${ADMIN_KEYRING}" ]; then
-    echo "Ceph Cluster isn't ready. Please try again later."
+    echo "CEPH CLUSTER NOT READY"
     return 1
   fi
   local OSD_NAME_LIST=$(kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" get pod -o custom-columns='NAME:.metadata.name,NODE:.spec.nodeName' --no-headers 2>/dev/null | awk '/ceph-osd-/ {print $2}')
@@ -198,27 +202,31 @@ function osd_overview {
 
 function check_replica_avail {
   if [ ! -e "${ADMIN_KEYRING}" ]; then
-    >&2 echo "Ceph Cluster isn't ready. Please try again later."
+    >&2 echo "CEPH CLUSTER NOT READY"
     return 1
   fi
   local EXP_SIZE=${1}
   if [ -z "${EXP_SIZE}" ]; then
-    >&2 echo "FALSE"
+    >&2 echo "WRONG VALUE"
     return 2
   elif ! positive_num "${EXP_SIZE}"; then
-    >&2 echo "FALSE"
+    >&2 echo "WRONG VALUE"
     return 3
   fi
   local POOL_JSON=$(ceph "${CLI_OPTS[@]}" osd pool ls detail -f json 2>/dev/null)
   local CUR_SIZE=$(echo "${POOL_JSON}"  | jq --raw-output .[0].size)
+  local NODE_JSON=$(ceph "${CLI_OPTS[@]}" osd tree -f json 2>/dev/null)
+  local AVAL_NODES=$(echo "${NODE_JSON}" | jq --raw-output '.nodes[] | select(.type=="host") | {"name": (.name), "number": (.children| length)} | select(.number>0) | .name' | wc -w)
+  local AVAL_OSDS=$(echo "${NODE_JSON}" | jq --raw-output '.nodes[] | select(.type=="osd") | .name ' | wc -w)
 
- # check nodes
-  local NODE_JSON=$(ceph "${CLI_OPTS[@]}" osd tree -f json | jq --raw-output '.nodes | .[] | select(.type=="host")  | {name}+{children}')
-  local NODE_LIST=$(echo "${NODE_JSON}" | jq --raw-output .name)
-  local NODES=$(echo "${NODE_LIST}" | wc -w)
-  if [ "${EXP_SIZE}" -gt "${NODES}" ]; then
-    >&2 echo "FALSE"
+ # check crush leaf, nodes & osds
+  local CRUSH_LEAF=$(get_crush_leaf)
+  if [ "${CRUSH_LEAF}" == "HOST" ] && [ "${EXP_SIZE}" -gt "${AVAL_NODES}" ]; then
+    >&2 echo "NODES NOT ENOUGH"
     return 4
+  elif [ "${CRUSH_LEAF}" == "OSD" ] && [ "${EXP_SIZE}" -gt "${AVAL_OSDS}" ]; then
+    >&2 echo "OSDS NOT ENOUGH"
+    return 5
   fi
 
   # check space
@@ -227,11 +235,10 @@ function check_replica_avail {
   local AVAL_SPACE=$(echo "${SPACE_JSON}" | jq .stats.total_avail_bytes)
   local EXP_SPACE=$(expr "${USED_SPACE}" "/" "${CUR_SIZE}" "*" "${EXP_SIZE}")
   if [ "${AVAL_SPACE}" -lt "${EXP_SPACE}" ]; then
-    >&2 echo "FALSE"
-    return 5
+    >&2 echo "SPACE NOT ENOUGH"
+    return 6
   fi
-
-  echo "TRUE"
+  echo "SUCCESS"
 }
 
 function set_all_replica {
@@ -243,7 +250,6 @@ function set_all_replica {
     ceph "${CLI_OPTS[@]}" osd pool set "${pool}" size "${EXP_SIZE}" &>/dev/null
   done
   echo "SUCCESS"
-
 }
 
 function stop_osd {
@@ -277,3 +283,74 @@ function start_osd {
   kubectl "${K8S_CERT[@]}" "${K8S_NAMESPACE[@]}" exec "${O_POD}" ceph-api start_or_create_a_osd "${DISK}" "${ACT}"
 }
 
+function check_leaf_avail {
+  # support osd & host.
+  local EXP_LEAF=${1}
+  local REPLICA=$(ceph "${CLI_OPTS[@]}" osd pool ls detail -f json 2>/dev/null | jq --raw-output .[0].size)
+  local NODE_JSON=$(ceph "${CLI_OPTS[@]}" osd tree -f json | jq --raw-output '.nodes[] | select(.type=="host") | {"name": (.name), "number": (.children | length)}')
+  local AVAL_NODES=$(echo "${NODE_JSON}" | jq --raw-output ' . | select(.number>0) | .name' | wc -w)
+
+  if [ "${AVAL_NODES}" -ge "${REPLICA}" ]; then
+    local AVAL_LEAF="HOST"
+  else
+    local AVAL_LEAF="OSD"
+  fi
+
+  case ${EXP_LEAF} in
+    OSD)
+      echo "TRUE"
+      ;;
+    HOST)
+      if [ "${AVAL_LEAF}" == "OSD" ]; then
+        >&2 echo "NODES NOT ENOUGH"
+        return 1
+      else
+        echo "TRUE"
+      fi
+      ;;
+    *)
+      >&2 echo "WRONG VALUE"
+      return 2
+      ;;
+  esac
+}
+
+function get_crush_leaf {
+  local CRUSH_RULE=$(ceph "${CLI_OPTS[@]}" osd pool ls detail -f json 2>/dev/null | jq --raw-output .[0].crush_ruleset)
+  case ${CRUSH_RULE} in
+    0)
+      echo "HOST"
+      ;;
+    1)
+      echo "OSD"
+      ;;
+    *)
+      >&2 echo "PROGRAM ERROR"
+      return 1
+      ;;
+  esac
+}
+
+function set_crush_leaf {
+  local EXP_LEAF=${1}
+  check_leaf_avail "${EXP_LEAF}" >/dev/null
+
+  local POOL_JSON=$(ceph "${CLI_OPTS[@]}" osd pool ls detail -f json 2>/dev/null)
+  local ALL_POOLS=$(echo "${POOL_JSON}"  | jq --raw-output .[].pool_name)
+  case ${EXP_LEAF} in
+    OSD)
+      local CRUSH_RULE=1
+      ;;
+    HOST)
+      local CRUSH_RULE=0
+      ;;
+    *)
+      >&2 echo "WRONG VALUE"
+      ;;
+    esac
+
+  for pool in ${ALL_POOLS}; do
+    ceph "${CLI_OPTS[@]}" osd pool set "${pool}" crush_ruleset "${CRUSH_RULE}" &>/dev/null
+  done
+  echo "SUCCESS"
+}
