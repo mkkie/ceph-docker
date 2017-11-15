@@ -10,39 +10,44 @@ function stop_a_osd {
     "${DOCKER_CMD}" stop $("${DOCKER_CMD}" ps -q -f LABEL=CEPH=osd -f LABEL=DEV_NAME="${DISK}") &>/dev/null
     echo "SUCCESS"
   else
-    echo "NONE"
+    echo "OSD ALREADY DOWN"
   fi
 }
 
 function start_or_create_a_osd {
   local DISK="/dev/${1}"
   local ACT=${2}
+
+  if ! get_avail_disks | grep -q "${DISK}"; then
+    >&2 echo "DISK NOT AVAILABLE"
+    return 1
+  fi
   if is_osd_running "${DISK}"; then
-    echo "SUCCESS"
+    echo "OSD ALREADY UP"
   elif [ "${ACT}" == "zap" ]; then
     if ! prepare_new_osd "${DISK}" &>/dev/null; then
-      echo "FAILED"
-      return 21
+      >&2 echo "OSD PREPARE FAILED"
+      return 2
     elif ! activate_osd "${DISK}" &>/dev/null; then
-      echo "FAILED"
-      return 22
+      >&2 echo "OSD ACTIVATE FAILED"
+      return 3
     else
       echo "SUCCESS"
     fi
   elif is_osd_disk "${DISK}"; then
     if ! activate_osd "${DISK}" &>/dev/null; then
-      echo "FAILED"
-      return 23
+      >&2 echo "OSD ACTIVATE FAILED"
+      return 3
     else
       echo "SUCCESS"
     fi
   else
     if ! prepare_new_osd "${DISK}" &>/dev/null; then
-      echo "FAILED"
-      return 24
+      >&2 echo "OSD PREPARE FAILED"
+      return 2
     elif ! activate_osd "${DISK}" &>/dev/null; then
-      echo "FAILED"
-      return 25
+      >&2 echo "OSD ACTIVATE FAILED"
+      return 3
     else
       echo "SUCCESS"
     fi
