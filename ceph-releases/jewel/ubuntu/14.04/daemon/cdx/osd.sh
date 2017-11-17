@@ -183,19 +183,11 @@ function add_new_osd {
       ;;
   esac
 
-  if [ -n "${OSD_ADD_LIST}" ]; then
-    # clear lvm & raid
-    clear_lvs_disks
-    clear_raid_disks
-  else
-    return 0
-  fi
-
   for disk in ${OSD_ADD_LIST}; do
     if ! prepare_new_osd "${disk}"; then
-      log "ERROR- OSD ${disk} fail to prepare."
+      log "ERROR- OSD fail to prepare. (${disk})"
     elif ! activate_osd ${disk}; then
-      log "ERROR- OSD ${disk} fail to activate."
+      log "ERROR- OSD fail to activate. (${disk})"
     fi
   done
 }
@@ -232,16 +224,26 @@ function prepare_new_osd {
     local osd2prep="$1"
   fi
 
+  if ! remove_lvs "${osd2prep}" &>/dev/null; then
+    log "ERROR- Failed to remove lvm. (${osd2prep})"
+    return 2
+  fi
+
+  if ! remove_raid "${osd2prep}" &>/dev/null; then
+    log "ERROR- Failed to remvoe raid. (${osd2prep})"
+    return 3
+  fi
+
   if ! ceph-disk zap "${osd2prep}" &>/dev/null; then
-    log "ERROR- Failed to zap disk"
-    return 1
+    log "ERROR- Failed to zap disk. (${osd2prep})"
+    return 4
   fi
 
   local CONT_NAME="$(create_cont_name "${osd2prep}")_prepare_$(date +%N)"
   if ! "$DOCKER_CMD" run -l CLUSTER="${CLUSTER}" -l CEPH=osd_prepare -l DEV_NAME="${osd2prep}" --name="${CONT_NAME}" \
     --privileged=true -v /dev/:/dev/ -e CDX_ENV="${CDX_ENV}" -e OSD_DEVICE="${osd2prep}" \
     "${DAEMON_VERSION}" osd_ceph_disk_prepare &>/dev/null; then
-    return 2
+    return 5
   fi
 }
 
@@ -379,56 +381,43 @@ function hotplug_OSD {
   done
 }
 
-# XXX: We suppose we don't need any lvs and raid disks at all and just delete them
-function clear_lvs_disks {
-  lvs=$(lvscan | grep '/dev.*' | awk '{print $2}')
-
-  if [ -n "$lvs" ]; then
-    log "Find logic volumes, inactive them."
-    for lv in $lvs
-    do
-      lvremove -f "${lv//\'/}"
-    done
-
+function remove_lvs {
+  if [ -z "$1" ]; then
+    return 0
+  else
+    local disk="${1}"
   fi
-  vgs=$(vgdisplay -C --noheadings --separator '|' | cut -d '|' -f 1)
-  if [ -n "$vgs" ]; then
-    log "Find VGs, delete them."
-    for vg in $vgs
-    do
-      vgremove -f "$vg"
-    done
 
-  fi
-  pvs=$(pvscan -s | grep '/dev/sd[a-z].*' || true)
-  if [ -n "$pvs" ]; then
-    log "Find PVs, delete them."
-    for pv in $pvs
-    do
-      pvremove -ff -y "$pv"
-    done
-
-  fi
-}
-
-function clear_raid_disks {
-  mds=$(mdadm --detail --scan  | awk '{print $2}')
-  if [ -z "${mds}" ]; then
-    # Nothing to do
+  if ! local pv_display=$(pvdisplay -C --noheadings --separator ' | ' | grep "${disk}"); then
     return 0
   fi
-  for md in ${mds}
-  do
-    devs=$(mdadm --detail --export "${md}" | grep MD_DEVICE_.*_DEV | cut -d '=' -f 2)
-    if [ -z "$devs" ]; then
-      log "No invalid devices"
-      return 1
-    fi
-    mdadm --stop "${md}"
-    for dev in ${devs}
-    do
-      log "Clear MD device: $dev"
-      mdadm --wait --zero-superblock --force "$dev"
+  local pv_list=$(echo "${pv_display}" | awk -F "|" '{print $1}')
+  local vg_list=$(echo "${pv_display}" | awk -F "|" '{print $2}')
+
+  for vg in ${vg_list}; do
+    local lv_list=$(lvdisplay -C --noheadings --separator ' | ' | grep -w "${vg}" | awk -F "|" '{print $1}')
+    # if lvm mounted, donothing.
+    for lv in ${lv_list}; do
+      df | grep -q /dev/${vg}/${lv} && return 1
     done
+    vgremove -f "${vg}" &>/dev/null
+  done
+
+  for pv in ${pv_list}; do
+    pvremove -f "${pv}" &>/dev/null
+  done
+}
+
+function remove_raid {
+  if [ -z "$1" ]; then
+    return 0
+  else
+    local disk=$(echo ${1} | sed 's/\/dev\///')
+  fi
+  local md_list=$(cat /proc/mdstat | grep md | grep ${disk} | awk '{print $1}')
+  for md in ${md_list}; do
+    local dev=$(cat /proc/mdstat | grep -w ${md} | awk '{print $5}' | sed 's/\[.*]//')
+    mdadm --stop /dev/"${md}" &>/dev/null
+    mdadm --zero-superblock /dev/${dev} &>/dev/null
   done
 }
