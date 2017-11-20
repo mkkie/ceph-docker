@@ -3,9 +3,17 @@
 source cdx/crush.sh
 source cdx/osd-api.sh
 
-function check_osd_env {
-  check_docker_cmd
+function check_init_cdx_osd {
+  etcdctl "${ETCDCTL_OPTS[@]}" "${KV_TLS[@]}" mk "${CLUSTER_PATH}"/max_osd "${MAX_OSD}" &>/dev/null || true
+  ceph "${CLI_OPTS[@]}" osd crush add-bucket "${HOSTNAME}" host &>/dev/null
+  # XXX: need more flexiable
+  ceph "${CLI_OPTS[@]}" osd crush move "${HOSTNAME}" root=default &>/dev/null
 
+  check_osd_env
+}
+
+function check_osd_env {
+  # MEM & CPU cores of OSD container
   if [ -n "${OSD_MEM}" ]; then
     OSD_MEM=(-m ${OSD_MEM})
   else
@@ -16,13 +24,12 @@ function check_osd_env {
   else
     OSD_CPU_CORE=()
   fi
-  etcdctl "${ETCDCTL_OPTS[@]}" "${KV_TLS[@]}" mk "${CLUSTER_PATH}"/max_osd "${MAX_OSD}" &>/dev/null || true
-  ceph "${CLI_OPTS[@]}" osd crush add-bucket "${HOSTNAME}" host &>/dev/null
-  # XXX: need more flexiable
-  ceph "${CLI_OPTS[@]}" osd crush move "${HOSTNAME}" root=default &>/dev/null
-}
 
-function check_docker_cmd {
+  # find container image DAEMON_VERSION
+  CDX_OSD_CONT_ID=$(${DOCKER_CMD} ps | awk '/cdx_o/ {print $1}')
+  DAEMON_VERSION=$(${DOCKER_CMD} inspect -f '{{.Config.Image}}' ${CDX_OSD_CONT_ID})
+
+  # check docker command
   if ! DOCKER_CMD=$(which docker); then
     log "ERROR- docker: command not found."
     exit 1
@@ -49,7 +56,7 @@ function docker {
 function cdx_osd {
   get_ceph_admin
   crush_initialization
-  check_osd_env
+  check_init_cdx_osd
   run_osds
 
   log "Start ETCD watcher."
@@ -74,41 +81,45 @@ function start_all_osds {
   local DISK_LIST=$(get_avail_disks)
 
   if [ -z "${DISK_LIST}" ]; then
-    log "ERROR- No available disk"
+    log "ERROR- No available disk."
     return 0
   fi
 
+  log "Start all OSDs."
   for disk in ${DISK_LIST}; do
-    if is_osd_disk "${disk}"; then
-      activate_osd "${disk}" || true
-    fi
+    activate_osd "${disk}" &>/dev/null &
   done
+  wait
 }
 
 function activate_osd {
   if [ -z "$1" ]; then
-    log "ERROR- Function activate_osd need to assign a OSD."
+    log "ERROR- Function activate_osd need to assign a DISK."
     return 1
   else
     local disk2act="$1"
   fi
 
-  # if OSD is running or come from another cluster, then return 0.
+  # if OSD is running  then return.
   if is_osd_running "${disk2act}"; then
     local CONT_ID=$("${DOCKER_CMD}" ps -q -f LABEL=CEPH=osd -f LABEL=DEV_NAME=${disk2act})
     log "${disk2act} is running as OSD (${CONT_ID})."
     return 0
-  elif ! is_osd_correct ${disk2act}; then
-    log "WARN- The OSD disk ${disk2act} unable to activate for current Ceph cluster."
-    return 2
   fi
 
+  # verify and get OSD
+  if ! local OSD_ID=$(verify_osd ${disk2act}); then
+    log "WARN- The OSD disk ${disk2act} unable to activate for current Ceph cluster."
+    return 3
+  fi
+
+  # Remove the old OSD container
   local CONT_NAME=$(create_cont_name "${disk2act}" "${OSD_ID}")
   if "$DOCKER_CMD" inspect "${CONT_NAME}" &>/dev/null; then
     "$DOCKER_CMD" rm "${CONT_NAME}" >/dev/null
   fi
 
-  # XXX: auto find DAEMON_VERSION
+  # Ready to activate
   "$DOCKER_CMD" run -d -l CLUSTER="${CLUSTER}" -l CEPH=osd -l DEV_NAME="${disk2act}" -l OSD_ID="${OSD_ID}" \
     --name="${CONT_NAME}" --privileged=true --net=host --pid=host -v /dev:/dev "${OSD_MEM[@]}" "${OSD_CPU_CORE[@]}" \
     -e CDX_ENV="${CDX_ENV}" -e DEBUG="${DEBUG}" -e OSD_DEVICE="${disk2act}" \
@@ -273,7 +284,7 @@ function create_cont_name {
 function is_osd_running {
   # give a disk and check OSD container
   if [ -z "$1" ]; then
-    log "ERROR- function is_osd_running need to assign a OSD."
+    log "ERROR- function is_osd_running need to assign an OSD."
     exit 1
   else
     local DEV_NAME="$1"
@@ -286,38 +297,6 @@ function is_osd_running {
   fi
 }
 
-function is_osd_correct {
-  if [ -z "$1" ]; then
-    log "ERROR- function is_osd_correct need to assign a OSD."
-    exit 1
-  else
-    # FIXME: disk2verify is a variable ti find ceph data JOURNAL partition.
-    disk2verify="$1"
-  fi
-  disk2verify="${disk2verify}1"
-
-  # check OSD mountable
-  if ! ceph-disk --setuser ceph --setgroup disk activate "${disk2verify}" --no-start-daemon &>/dev/null; then
-    OSD_ID=""
-    umount "${disk2verify}" &>/dev/null || true
-    return 2
-  fi
-
-  # check OSD Key
-  local OSD_PATH=$(df | grep "${disk2verify}" | awk '{print $6}')
-  local TMP_OSD_ID=$(echo "${OSD_PATH}" | sed "s/.*${CLUSTER}-//g")
-  local OSD_KEY_IN_CEPH=$(ceph "${CLI_OPTS[@]}" auth get-key osd."${TMP_OSD_ID}" 2>/dev/null)
-  if [ -z "${OSD_KEY_IN_CEPH}" ]; then
-    return 3
-  elif cat "${OSD_PATH}"/keyring | grep -q "${OSD_KEY_IN_CEPH}"; then
-    OSD_ID="${TMP_OSD_ID}"
-    umount "${disk2verify}"
-    return 0
-  else
-    return 4
-  fi
-}
-
 function is_osd_disk {
   # Check label partition table includes "ceph journal" or not
   if ! sgdisk --verify "$1" &>/dev/null; then
@@ -326,6 +305,51 @@ function is_osd_disk {
     return 0
   else
     return 1
+  fi
+}
+
+function verify_osd {
+  if [ -z "${1}" ]; then
+    log "ERROR- function verify_osd need to assign a disk."
+    exit 1
+  else
+    local disk="${1}"
+  fi
+
+  # is disk an OSD ?
+  if ! sgdisk --verify "${disk}" &>/dev/null; then
+    >&2 echo "DISK ERROR"
+    return 2
+  elif ! parted -s "$1" print 2>/dev/null | egrep -sq '^ 1.*ceph data' ; then
+    >&2 echo "DISK NOT AN OSD"
+    return 3
+  fi
+
+  # FIXME: we choose partition 1 to find ceph data JOURNAL.
+  local diskp1="${disk}1"
+
+  # check OSD mountable
+  if ! ceph-disk --setuser ceph --setgroup disk activate "${diskp1}" --no-start-daemon &>/dev/null; then
+    umount "${diskp1}" &>/dev/null || true
+    >&2 echo "OSD CANNOT MOUNT"
+    return 4
+  fi
+
+  # check OSD Key
+  local OSD_PATH=$(df | grep "${diskp1}" | awk '{print $6}')
+  local TMP_OSD_ID=$(echo "${OSD_PATH}" | sed "s/.*${CLUSTER}-//g")
+  local OSD_KEY_IN_CEPH=$(ceph "${CLI_OPTS[@]}" auth get-key osd."${TMP_OSD_ID}" 2>/dev/null)
+  if [ -z "${OSD_KEY_IN_CEPH}" ]; then
+    >&2 echo "OSD.${TMP_OSD_ID} NOT EXISTS"
+    return 5
+  elif cat "${OSD_PATH}"/keyring | grep -q "${OSD_KEY_IN_CEPH}"; then
+    umount "${diskp1}"
+    OSD_ID="${TMP_OSD_ID}"
+    echo "${OSD_ID}"
+    return 0
+  else
+    >&2 echo "WRONG OSD"
+    return 6
   fi
 }
 
