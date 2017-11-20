@@ -18,40 +18,37 @@ function start_or_create_a_osd {
   local DISK="/dev/${1}"
   local ACT=${2}
 
-  if ! get_avail_disks | grep -q "${DISK}"; then
-    >&2 echo "DISK NOT AVAILABLE"
-    return 1
-  fi
   if is_osd_running "${DISK}"; then
-    echo "OSD ALREADY UP"
-  elif [ "${ACT}" == "zap" ]; then
-    if ! prepare_new_osd "${DISK}" &>/dev/null; then
-      >&2 echo "OSD PREPARE FAILED"
-      return 2
-    elif ! activate_osd "${DISK}" &>/dev/null; then
-      >&2 echo "OSD ACTIVATE FAILED"
-      return 3
-    else
-      echo "SUCCESS"
-    fi
-  elif is_osd_disk "${DISK}"; then
-    if ! activate_osd "${DISK}" &>/dev/null; then
-      >&2 echo "OSD ACTIVATE FAILED"
-      return 3
-    else
-      echo "SUCCESS"
-    fi
-  else
-    if ! prepare_new_osd "${DISK}" &>/dev/null; then
-      >&2 echo "OSD PREPARE FAILED"
-      return 2
-    elif ! activate_osd "${DISK}" &>/dev/null; then
-      >&2 echo "OSD ACTIVATE FAILED"
-      return 3
-    else
-      echo "SUCCESS"
-    fi
+    echo "SUCCESS"
+    return 0
   fi
+
+  if verify_osd "${DISK}" >/dev/null; then
+    local OSD_STATUS="ready"
+  else
+    local OSD_STATUS="zap"
+  fi
+
+  if [ "${ACT}" == "zap" ] && [ "${OSD_STATUS}" == "ready" ]; then
+    >&2 echo "OSD SHOULD NOT BE ZAP"
+    return 2
+  fi
+
+  case ${OSD_STATUS} in
+    ready)
+      activate_osd "${DISK}" >/dev/null && echo "SUCCESS"
+      ;;
+    zap)
+      if ! prepare_new_osd "${DISK}" &>/dev/null; then
+        >&2 echo "FAIL TO PREPARE OSD"
+        return 3
+      else
+        activate_osd "${DISK}" >/dev/null && echo "SUCCESS"
+      fi
+      ;;
+    *)
+      ;;
+  esac
 }
 
 function restart_all_osds {
