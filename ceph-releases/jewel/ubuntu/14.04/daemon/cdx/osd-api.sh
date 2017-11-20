@@ -10,7 +10,7 @@ function stop_a_osd {
     "${DOCKER_CMD}" stop $("${DOCKER_CMD}" ps -q -f LABEL=CEPH=osd -f LABEL=DEV_NAME="${DISK}") &>/dev/null
     echo "SUCCESS"
   else
-    echo "NONE"
+    echo "OSD ALREADY DOWN"
   fi
 }
 
@@ -21,6 +21,11 @@ function start_or_create_a_osd {
   if is_osd_running "${DISK}"; then
     echo "SUCCESS"
     return 0
+  fi
+
+  if ! get_avail_disks | grep -q "${DISK}"; then
+    >&2 echo "DISK NOT AVAILABLE"
+    return 1
   fi
 
   if verify_osd "${DISK}" >/dev/null; then
