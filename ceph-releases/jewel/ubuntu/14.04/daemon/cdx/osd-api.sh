@@ -23,9 +23,15 @@ function start_or_create_a_osd {
     return 0
   fi
 
-  if verify_osd "${DISK}" >/dev/null; then
+  if ! get_avail_disks | grep -q "${DISK}"; then
+    >&2 echo "DISK NOT AVAILABLE"
+    return 1
+  fi
+
+  if verify_osd "${DISK}" &>/dev/null; then
     local OSD_STATUS="ready"
   else
+    # XXX: should avoid zap OSD disk
     local OSD_STATUS="zap"
   fi
 
