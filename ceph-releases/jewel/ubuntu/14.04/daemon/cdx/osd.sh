@@ -340,6 +340,7 @@ function verify_osd {
   local TMP_OSD_ID=$(echo "${OSD_PATH}" | sed "s/.*${CLUSTER}-//g")
   local OSD_KEY_IN_CEPH=$(ceph "${CLI_OPTS[@]}" auth get-key osd."${TMP_OSD_ID}" 2>/dev/null)
   if [ -z "${OSD_KEY_IN_CEPH}" ]; then
+    umount "${diskp1}" &>/dev/null || true
     >&2 echo "OSD.${TMP_OSD_ID} NOT EXISTS"
     return 5
   elif cat "${OSD_PATH}"/keyring | grep -q "${OSD_KEY_IN_CEPH}"; then
@@ -348,6 +349,7 @@ function verify_osd {
     echo "${OSD_ID}"
     return 0
   else
+    umount "${diskp1}" &>/dev/null || true
     >&2 echo "WRONG OSD"
     return 6
   fi

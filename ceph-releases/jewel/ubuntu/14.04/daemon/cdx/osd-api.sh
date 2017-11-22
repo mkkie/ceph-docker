@@ -28,9 +28,10 @@ function start_or_create_a_osd {
     return 1
   fi
 
-  if verify_osd "${DISK}" >/dev/null; then
+  if verify_osd "${DISK}" &>/dev/null; then
     local OSD_STATUS="ready"
   else
+    # XXX: should avoid zap OSD disk
     local OSD_STATUS="zap"
   fi
 
