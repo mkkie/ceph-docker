@@ -28,31 +28,38 @@ function start_or_create_a_osd {
     return 1
   fi
 
-  if verify_osd "${DISK}" &>/dev/null; then
-    local OSD_STATUS="ready"
-  else
-    # XXX: should avoid zap OSD disk
-    local OSD_STATUS="zap"
-  fi
+  local OSD_STATUS=$(verify_osd "${DISK}")
 
-  if [ "${ACT}" == "zap" ] && [ "${OSD_STATUS}" == "ready" ]; then
+  if [ "${ACT}" == "zap" ] && [ "${OSD_STATUS}" == "OSD" ]; then
     >&2 echo "OSD SHOULD NOT BE ZAP"
     return 2
+  elif [ "${ACT}" == "zap" ]; then
+    ! prepare_new_osd "${DISK}" &>/dev/null && >&2 echo "FAIL TO PREPARE OSD" && return 3 || OSD_STATUS="OSD"
   fi
 
   case ${OSD_STATUS} in
-    ready)
-      activate_osd "${DISK}" >/dev/null && echo "SUCCESS"
+    LVM)
+      echo "DISK IS LVM"
       ;;
-    zap)
-      if ! prepare_new_osd "${DISK}" &>/dev/null; then
-        >&2 echo "FAIL TO PREPARE OSD"
-        return 3
-      else
-        activate_osd "${DISK}" >/dev/null && echo "SUCCESS"
-      fi
+    RAID)
+      echo "DISK IS RAID"
+      ;;
+    NOT-OSD)
+      ! prepare_new_osd "${DISK}" &>/dev/null && >&2 echo "FAIL TO PREPARE OSD" && return 4
+      ! activate_osd "${DISK}" &>/dev/null && >&2 echo "FAIL TO ACTIVATE OSD" && return 5 || echo "SUCCESS"
+      ;;
+    UNMNT-OSD)
+      echo "OSD IS UNMOUNTABLE"
+      ;;
+    ERR-KEY-OSD)
+      echo "OSD HAS WRONG KEY"
+      ;;
+    [[:digit:]]*|OSD)
+      ! activate_osd "${DISK}" &>/dev/null && >&2 echo "FAIL TO ACTIVATE OSD" && return 6 || echo "SUCCESS"
       ;;
     *)
+      echo "ERROR- variable OSD_STATUS not defined in function start_or_create_a_osd."
+      exit 3
       ;;
   esac
 }
