@@ -2,6 +2,7 @@
 
 source cdx/crush.sh
 source cdx/osd-api.sh
+source cdx/osd-verify.sh
 
 function check_init_cdx_osd {
   etcdctl "${ETCDCTL_OPTS[@]}" "${KV_TLS[@]}" mk "${CLUSTER_PATH}"/max_osd "${MAX_OSD}" &>/dev/null || true
@@ -305,53 +306,6 @@ function is_osd_disk {
     return 0
   else
     return 1
-  fi
-}
-
-function verify_osd {
-  if [ -z "${1}" ]; then
-    log "ERROR- function verify_osd need to assign a disk."
-    exit 1
-  else
-    local disk="${1}"
-  fi
-
-  # is disk an OSD ?
-  if ! sgdisk --verify "${disk}" &>/dev/null; then
-    >&2 echo "DISK ERROR"
-    return 2
-  elif ! parted -s "$1" print 2>/dev/null | egrep -sq '^ 1.*ceph data' ; then
-    >&2 echo "DISK NOT AN OSD"
-    return 3
-  fi
-
-  # FIXME: we choose partition 1 to find ceph data JOURNAL.
-  local diskp1="${disk}1"
-
-  # check OSD mountable
-  if ! ceph-disk --setuser ceph --setgroup disk activate "${diskp1}" --no-start-daemon &>/dev/null; then
-    umount "${diskp1}" &>/dev/null || true
-    >&2 echo "OSD CANNOT MOUNT"
-    return 4
-  fi
-
-  # check OSD Key
-  local OSD_PATH=$(df | grep "${diskp1}" | awk '{print $6}')
-  local TMP_OSD_ID=$(echo "${OSD_PATH}" | sed "s/.*${CLUSTER}-//g")
-  local OSD_KEY_IN_CEPH=$(ceph "${CLI_OPTS[@]}" auth get-key osd."${TMP_OSD_ID}" 2>/dev/null)
-  if [ -z "${OSD_KEY_IN_CEPH}" ]; then
-    umount "${diskp1}" &>/dev/null || true
-    >&2 echo "OSD.${TMP_OSD_ID} NOT EXISTS"
-    return 5
-  elif cat "${OSD_PATH}"/keyring | grep -q "${OSD_KEY_IN_CEPH}"; then
-    umount "${diskp1}"
-    OSD_ID="${TMP_OSD_ID}"
-    echo "${OSD_ID}"
-    return 0
-  else
-    umount "${diskp1}" &>/dev/null || true
-    >&2 echo "WRONG OSD"
-    return 6
   fi
 }
 
