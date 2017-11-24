@@ -30,7 +30,7 @@ function start_or_create_a_osd {
 
   local OSD_STATUS=$(verify_osd "${DISK}")
 
-  if [ "${ACT}" == "zap" ] && [ "${OSD_STATUS}" == "OSD" ]; then
+  if [ "${ACT}" == "zap" ] && natural_num "${OSD_STATUS}"; then
     >&2 echo "OSD SHOULD NOT BE ZAP"
     return 2
   elif [ "${ACT}" == "zap" ]; then
@@ -49,7 +49,7 @@ function start_or_create_a_osd {
       ! activate_osd "${DISK}" &>/dev/null && >&2 echo "FAIL TO ACTIVATE OSD" && return 5 || echo "SUCCESS"
       ;;
     UNMNT-OSD)
-      echo "OSD IS UNMOUNTABLE"
+      echo "OSD HAS WRONG INFO"
       ;;
     ERR-KEY-OSD)
       echo "OSD HAS WRONG KEY"
