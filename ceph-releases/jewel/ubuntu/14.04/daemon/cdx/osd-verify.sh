@@ -12,7 +12,7 @@ function verify_osd {
   is_disk_raid "${disk}" && echo "RAID" && return 0 || true
   ! is_disk_osd "${disk}" && echo "NOT-OSD" && return 0
   ! is_osd_mountable "${disk}" && echo "UNMNT-OSD" && return 0
-  ! is_osd_key_correctt "${disk}" && echo "ERR-KEY-OSD" && return 0
+  ! is_osd_key_correct "${disk}" && echo "ERR-KEY-OSD" && return 0
   echo "${OSD_ID}"
 }
 
@@ -80,9 +80,9 @@ function is_osd_mountable {
   fi
 }
 
-function is_osd_key_correctt {
+function is_osd_key_correct {
   if [ -z "${1}" ]; then
-    >&2 echo "ERROR- function is_osd_key_correctt need to assign a osd."
+    >&2 echo "ERROR- function is_osd_key_correct need to assign a osd."
     exit 1
   else
     # XXX: only check partition 1
