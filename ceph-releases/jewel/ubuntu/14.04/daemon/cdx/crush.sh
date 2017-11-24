@@ -65,7 +65,7 @@ function auto_change_crush {
       log "WARN- Last time auto_change_crush is locked by ${HOSTNAME} itself."
       break
     else
-      log "WARN -Auto_change_crush is locked by ${LOCKER_NAME}. Waiting..."
+      log "WARN- Auto_change_crush is locked by ${LOCKER_NAME}. Waiting..."
       sleep 10
     fi
   done

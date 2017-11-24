@@ -2,10 +2,19 @@
 
 source cdx/crush.sh
 source cdx/osd-api.sh
+source cdx/osd-verify.sh
+
+function check_init_cdx_osd {
+  etcdctl "${ETCDCTL_OPTS[@]}" "${KV_TLS[@]}" mk "${CLUSTER_PATH}"/max_osd "${MAX_OSD}" &>/dev/null || true
+  ceph "${CLI_OPTS[@]}" osd crush add-bucket "${HOSTNAME}" host &>/dev/null
+  # XXX: need more flexiable
+  ceph "${CLI_OPTS[@]}" osd crush move "${HOSTNAME}" root=default &>/dev/null
+
+  check_osd_env
+}
 
 function check_osd_env {
-  check_docker_cmd
-
+  # MEM & CPU cores of OSD container
   if [ -n "${OSD_MEM}" ]; then
     OSD_MEM=(-m ${OSD_MEM})
   else
@@ -16,13 +25,8 @@ function check_osd_env {
   else
     OSD_CPU_CORE=()
   fi
-  etcdctl "${ETCDCTL_OPTS[@]}" "${KV_TLS[@]}" mk "${CLUSTER_PATH}"/max_osd "${MAX_OSD}" &>/dev/null || true
-  ceph "${CLI_OPTS[@]}" osd crush add-bucket "${HOSTNAME}" host &>/dev/null
-  # XXX: need more flexiable
-  ceph "${CLI_OPTS[@]}" osd crush move "${HOSTNAME}" root=default &>/dev/null
-}
 
-function check_docker_cmd {
+  # check docker command
   if ! DOCKER_CMD=$(which docker); then
     log "ERROR- docker: command not found."
     exit 1
@@ -30,6 +34,10 @@ function check_docker_cmd {
     "$DOCKER_CMD" -v
     exit 1
   fi
+
+  # find container image DAEMON_VERSION
+  CDX_OSD_CONT_ID=$(${DOCKER_CMD} ps | awk '/cdx_o/ {print $1}')
+  DAEMON_VERSION=$(${DOCKER_CMD} inspect -f '{{.Config.Image}}' ${CDX_OSD_CONT_ID})
 }
 
 function docker {
@@ -49,7 +57,7 @@ function docker {
 function cdx_osd {
   get_ceph_admin
   crush_initialization
-  check_osd_env
+  check_init_cdx_osd
   run_osds
 
   log "Start ETCD watcher."
@@ -74,41 +82,45 @@ function start_all_osds {
   local DISK_LIST=$(get_avail_disks)
 
   if [ -z "${DISK_LIST}" ]; then
-    log "ERROR- No available disk"
+    log "ERROR- No available disk."
     return 0
   fi
 
+  log "Start all OSDs."
   for disk in ${DISK_LIST}; do
-    if is_osd_disk "${disk}"; then
-      activate_osd "${disk}"
-    fi
+    activate_osd "${disk}" &>/dev/null &
   done
+  wait
 }
 
 function activate_osd {
   if [ -z "$1" ]; then
-    log "ERROR- Function activate_osd need to assign a OSD."
+    log "ERROR- Function activate_osd need to assign a DISK."
     return 1
   else
     local disk2act="$1"
   fi
 
-  # if OSD is running or come from another cluster, then return 0.
+  # if OSD is running  then return.
   if is_osd_running "${disk2act}"; then
     local CONT_ID=$("${DOCKER_CMD}" ps -q -f LABEL=CEPH=osd -f LABEL=DEV_NAME=${disk2act})
     log "${disk2act} is running as OSD (${CONT_ID})."
     return 0
-  elif ! is_osd_correct ${disk2act}; then
-    log "WARN- The OSD disk ${disk2act} unable to activate for current Ceph cluster."
-    return 0
   fi
 
+  # verify and get OSD
+  if ! local OSD_ID=$(verify_osd ${disk2act}); then
+    log "WARN- The OSD disk ${disk2act} unable to activate for current Ceph cluster."
+    return 3
+  fi
+
+  # Remove the old OSD container
   local CONT_NAME=$(create_cont_name "${disk2act}" "${OSD_ID}")
   if "$DOCKER_CMD" inspect "${CONT_NAME}" &>/dev/null; then
     "$DOCKER_CMD" rm "${CONT_NAME}" >/dev/null
   fi
 
-  # XXX: auto find DAEMON_VERSION
+  # Ready to activate
   "$DOCKER_CMD" run -d -l CLUSTER="${CLUSTER}" -l CEPH=osd -l DEV_NAME="${disk2act}" -l OSD_ID="${OSD_ID}" \
     --name="${CONT_NAME}" --privileged=true --net=host --pid=host -v /dev:/dev "${OSD_MEM[@]}" "${OSD_CPU_CORE[@]}" \
     -e CDX_ENV="${CDX_ENV}" -e DEBUG="${DEBUG}" -e OSD_DEVICE="${disk2act}" \
@@ -119,6 +131,9 @@ function activate_osd {
   if is_osd_running "${disk2act}"; then
     local CONT_ID=$("${DOCKER_CMD}" ps -q -f LABEL=CEPH=osd -f LABEL=DEV_NAME="${disk2act}")
     log "Success to activate ${disk2act} (${CONT_ID})."
+  else
+    local CONT_ID=$("${DOCKER_CMD}" ps -a -l -q -f LABEL=CEPH=osd -f LABEL=DEV_NAME="${disk2act}")
+    log "WARN- Failed to activate ${disk2act} (${CONT_ID})."
   fi
 }
 
@@ -180,19 +195,11 @@ function add_new_osd {
       ;;
   esac
 
-  if [ -n "${OSD_ADD_LIST}" ]; then
-    # clear lvm & raid
-    clear_lvs_disks
-    clear_raid_disks
-  else
-    return 0
-  fi
-
   for disk in ${OSD_ADD_LIST}; do
     if ! prepare_new_osd "${disk}"; then
-      log "ERROR- OSD ${disk} fail to prepare."
+      log "ERROR- OSD fail to prepare. (${disk})"
     elif ! activate_osd ${disk}; then
-      log "ERROR- OSD ${disk} fail to activate."
+      log "ERROR- OSD fail to activate. (${disk})"
     fi
   done
 }
@@ -229,17 +236,26 @@ function prepare_new_osd {
     local osd2prep="$1"
   fi
 
+  if ! remove_lvs "${osd2prep}" &>/dev/null; then
+    log "ERROR- Failed to remove lvm. (${osd2prep})"
+    return 2
+  fi
+
+  if ! remove_raid "${osd2prep}" &>/dev/null; then
+    log "ERROR- Failed to remvoe raid. (${osd2prep})"
+    return 3
+  fi
+
   if ! ceph-disk zap "${osd2prep}" &>/dev/null; then
-    log "ERROR- Failed to zap disk"
+    log "ERROR- Failed to zap disk. (${osd2prep})"
+    return 4
   fi
 
   local CONT_NAME="$(create_cont_name "${osd2prep}")_prepare_$(date +%N)"
-  if "$DOCKER_CMD" run -l CLUSTER="${CLUSTER}" -l CEPH=osd_prepare -l DEV_NAME="${osd2prep}" --name="${CONT_NAME}" \
+  if ! "$DOCKER_CMD" run -l CLUSTER="${CLUSTER}" -l CEPH=osd_prepare -l DEV_NAME="${osd2prep}" --name="${CONT_NAME}" \
     --privileged=true -v /dev/:/dev/ -e CDX_ENV="${CDX_ENV}" -e OSD_DEVICE="${osd2prep}" \
     "${DAEMON_VERSION}" osd_ceph_disk_prepare &>/dev/null; then
-    return 0
-  else
-    return 1
+    return 5
   fi
 }
 
@@ -269,7 +285,7 @@ function create_cont_name {
 function is_osd_running {
   # give a disk and check OSD container
   if [ -z "$1" ]; then
-    log "ERROR- function is_osd_running need to assign a OSD."
+    log "ERROR- function is_osd_running need to assign an OSD."
     exit 1
   else
     local DEV_NAME="$1"
@@ -277,30 +293,7 @@ function is_osd_running {
 
   # check running & exited containers
   local CONT_ID=$("${DOCKER_CMD}" ps -q -f LABEL=CEPH=osd -f LABEL=DEV_NAME="${DEV_NAME}")
-  if [ -n "${CONT_ID}" ]; then
-    return 0
-  else
-    return 1
-  fi
-}
-
-function is_osd_correct {
-  if [ -z "$1" ]; then
-    log "ERROR- function is_osd_correct need to assign a OSD."
-    exit 1
-  else
-    # FIXME: disk2verify is a variable ti find ceph data JOURNAL partition.
-    disk2verify="$1"
-  fi
-
-  disk2verify="${disk2verify}1"
-  if ceph-disk --setuser ceph --setgroup disk activate "${disk2verify}" --no-start-daemon &>/dev/null; then
-    OSD_ID=$(df | grep "${disk2verify}" | sed "s/.*${CLUSTER}-//g")
-    umount "${disk2verify}"
-    return 0
-  else
-    OSD_ID=""
-    umount "${disk2verify}" &>/dev/null || true
+  if [ -z "${CONT_ID}" ]; then
     return 1
   fi
 }
@@ -368,56 +361,43 @@ function hotplug_OSD {
   done
 }
 
-# XXX: We suppose we don't need any lvs and raid disks at all and just delete them
-function clear_lvs_disks {
-  lvs=$(lvscan | grep '/dev.*' | awk '{print $2}')
-
-  if [ -n "$lvs" ]; then
-    log "Find logic volumes, inactive them."
-    for lv in $lvs
-    do
-      lvremove -f "${lv//\'/}"
-    done
-
+function remove_lvs {
+  if [ -z "$1" ]; then
+    return 0
+  else
+    local disk="${1}"
   fi
-  vgs=$(vgdisplay -C --noheadings --separator '|' | cut -d '|' -f 1)
-  if [ -n "$vgs" ]; then
-    log "Find VGs, delete them."
-    for vg in $vgs
-    do
-      vgremove -f "$vg"
-    done
 
-  fi
-  pvs=$(pvscan -s | grep '/dev/sd[a-z].*' || true)
-  if [ -n "$pvs" ]; then
-    log "Find PVs, delete them."
-    for pv in $pvs
-    do
-      pvremove -ff -y "$pv"
-    done
-
-  fi
-}
-
-function clear_raid_disks {
-  mds=$(mdadm --detail --scan  | awk '{print $2}')
-  if [ -z "${mds}" ]; then
-    # Nothing to do
+  if ! local pv_display=$(pvdisplay -C --noheadings --separator ' | ' | grep "${disk}"); then
     return 0
   fi
-  for md in ${mds}
-  do
-    devs=$(mdadm --detail --export "${md}" | grep MD_DEVICE_.*_DEV | cut -d '=' -f 2)
-    if [ -z "$devs" ]; then
-      log "No invalid devices"
-      return 1
-    fi
-    mdadm --stop "${md}"
-    for dev in ${devs}
-    do
-      log "Clear MD device: $dev"
-      mdadm --wait --zero-superblock --force "$dev"
+  local pv_list=$(echo "${pv_display}" | awk -F "|" '{print $1}')
+  local vg_list=$(echo "${pv_display}" | awk -F "|" '{print $2}')
+
+  for vg in ${vg_list}; do
+    local lv_list=$(lvdisplay -C --noheadings --separator ' | ' | grep -w "${vg}" | awk -F "|" '{print $1}')
+    # if lvm mounted, donothing.
+    for lv in ${lv_list}; do
+      df | grep -q /dev/${vg}/${lv} && return 1
     done
+    vgremove -f "${vg}" &>/dev/null
+  done
+
+  for pv in ${pv_list}; do
+    pvremove -f "${pv}" &>/dev/null
+  done
+}
+
+function remove_raid {
+  if [ -z "$1" ]; then
+    return 0
+  else
+    local disk=$(echo ${1} | sed 's/\/dev\///')
+  fi
+  local md_list=$(cat /proc/mdstat | grep md | grep ${disk} | awk '{print $1}')
+  for md in ${md_list}; do
+    local dev=$(cat /proc/mdstat | grep -w ${md} | awk '{print $5}' | sed 's/\[.*]//')
+    mdadm --stop /dev/"${md}" &>/dev/null
+    mdadm --zero-superblock /dev/${dev} &>/dev/null
   done
 }

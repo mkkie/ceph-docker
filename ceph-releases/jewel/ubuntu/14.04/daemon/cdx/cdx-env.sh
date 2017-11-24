@@ -26,7 +26,7 @@
 : "${CRUSH_TYPE:=space}"
 : "${PGs_PER_OSD:=32}"
 : "${OSD_INIT_MODE:=minimal}"
-: "${MAX_OSD:=1}"
+: "${MAX_OSD:=99}"
 : "${OSD_MEM:=2048M}"
 : "${OSD_CPU_CORE:=2}"
 

@@ -18,40 +18,50 @@ function start_or_create_a_osd {
   local DISK="/dev/${1}"
   local ACT=${2}
 
+  if is_osd_running "${DISK}"; then
+    echo "SUCCESS"
+    return 0
+  fi
+
   if ! get_avail_disks | grep -q "${DISK}"; then
     >&2 echo "DISK NOT AVAILABLE"
     return 1
   fi
-  if is_osd_running "${DISK}"; then
-    echo "OSD ALREADY UP"
+
+  local OSD_STATUS=$(verify_osd "${DISK}")
+
+  if [ "${ACT}" == "zap" ] && natural_num "${OSD_STATUS}"; then
+    >&2 echo "OSD SHOULD NOT BE ZAP"
+    return 2
   elif [ "${ACT}" == "zap" ]; then
-    if ! prepare_new_osd "${DISK}" &>/dev/null; then
-      >&2 echo "OSD PREPARE FAILED"
-      return 2
-    elif ! activate_osd "${DISK}" &>/dev/null; then
-      >&2 echo "OSD ACTIVATE FAILED"
-      return 3
-    else
-      echo "SUCCESS"
-    fi
-  elif is_osd_disk "${DISK}"; then
-    if ! activate_osd "${DISK}" &>/dev/null; then
-      >&2 echo "OSD ACTIVATE FAILED"
-      return 3
-    else
-      echo "SUCCESS"
-    fi
-  else
-    if ! prepare_new_osd "${DISK}" &>/dev/null; then
-      >&2 echo "OSD PREPARE FAILED"
-      return 2
-    elif ! activate_osd "${DISK}" &>/dev/null; then
-      >&2 echo "OSD ACTIVATE FAILED"
-      return 3
-    else
-      echo "SUCCESS"
-    fi
+    ! prepare_new_osd "${DISK}" &>/dev/null && >&2 echo "FAIL TO PREPARE OSD" && return 3 || OSD_STATUS="OSD"
   fi
+
+  case ${OSD_STATUS} in
+    LVM)
+      echo "DISK IS LVM"
+      ;;
+    RAID)
+      echo "DISK IS RAID"
+      ;;
+    NOT-OSD)
+      ! prepare_new_osd "${DISK}" &>/dev/null && >&2 echo "FAIL TO PREPARE OSD" && return 4
+      ! activate_osd "${DISK}" &>/dev/null && >&2 echo "FAIL TO ACTIVATE OSD" && return 5 || echo "SUCCESS"
+      ;;
+    UNMNT-OSD)
+      echo "OSD HAS WRONG INFO"
+      ;;
+    ERR-KEY-OSD)
+      echo "OSD HAS WRONG KEY"
+      ;;
+    [[:digit:]]*|OSD)
+      ! activate_osd "${DISK}" &>/dev/null && >&2 echo "FAIL TO ACTIVATE OSD" && return 6 || echo "SUCCESS"
+      ;;
+    *)
+      echo "ERROR- variable OSD_STATUS not defined in function start_or_create_a_osd."
+      exit 3
+      ;;
+  esac
 }
 
 function restart_all_osds {
