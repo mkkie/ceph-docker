@@ -105,5 +105,8 @@ if [ ${KV_TYPE} == "etcd" ]; then
   check_kv_ip
 fi
 
+# XXX: We should keep to observe who mounting something in this moment.
+rm -r /var/lib/ceph/tmp/tmp.* 2>/dev/null || true
+
 # FIXME: Read dns ip from env
 echo -e "search ceph.svc.cluster.local svc.cluster.local cluster.local\nnameserver 10.0.0.10\noptions ndots:5" > /etc/resolv.conf
