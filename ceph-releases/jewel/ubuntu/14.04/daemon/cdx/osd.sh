@@ -27,16 +27,14 @@ function check_osd_env {
   fi
 
   # check docker command
-  if ! DOCKER_CMD=$(which docker); then
-    log "ERROR- docker: command not found."
-    exit 1
-  elif ! "${DOCKER_CMD}" -v | grep -wq "version"; then
-    "$DOCKER_CMD" -v
+  DOCKER_CMD=docker
+  if ! "${DOCKER_CMD}" -v | grep -wq "version"; then
+    "${DOCKER_CMD}" -v
     exit 1
   fi
 
   # find container image DAEMON_VERSION
-  CDX_OSD_CONT_ID=$(${DOCKER_CMD} ps | awk '/cdx_o/ {print $1}')
+  CDX_OSD_CONT_ID=$(basename "$(cat /proc/1/cpuset)")
   DAEMON_VERSION=$(${DOCKER_CMD} inspect -f '{{.Config.Image}}' ${CDX_OSD_CONT_ID})
 }
 
