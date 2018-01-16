@@ -31,6 +31,14 @@ $ docker run -it --net=host --privileged=true -e CDX_ENV=true -e CEPH_VFY=all \
   -v /lib/modules/:/lib/modules/ -v /dev:/dev cdxvirt/ceph-daemon:latest cdx_verify
 ```
 
+## TOOLS
+### Fix MON
+```txt
+$ docker run -it --net=host -e CDX_ENV=true -e DEBUG=verbose -e MON_RCY=true \
+  -e CEPH_PUBLIC_NETWORK="192.168.0.0/24" -v /var/lib/ceph:/var/lib/ceph \
+  cdxvirt/ceph-daemon:latest cdx_mon
+```
+
 ## API
 ### OSD
 ```txt
@@ -69,7 +77,7 @@ OPTS =>
 
 ## CDX ENTRYPOINT
 ### cdx_mon
-Brfore running start_mon, check monip, monmap first.
+Before running start_mon, check monip, monmap first.
 ### cdx_osd
 Choose disk, zap disk, and activate disk in different containers.
 ### cdx_controller
