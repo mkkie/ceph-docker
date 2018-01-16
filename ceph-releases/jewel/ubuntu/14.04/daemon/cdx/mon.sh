@@ -85,9 +85,38 @@ function update_etcd_monmap {
   fi
 }
 
+function recovery_mon {
+  verify_mon_folder
+
+  # remove all monmap list then add itself
+  ceph-mon -i ${MON_NAME} --extract-monmap /tmp/monmap
+  local MONMAP_LIST=$(monmaptool -p /tmp/monmap | awk '/mon\./ { sub ("mon.", "", $3); print $3}')
+  for del_mon in ${MONMAP_LIST}; do
+    monmaptool --rm $del_mon /tmp/monmap
+  done
+
+  # add itself into monmap
+  monmaptool --add ${MON_NAME} ${MON_IP}:6789 /tmp/monmap
+  ceph-mon -i ${MON_NAME} --inject-monmap /tmp/monmap
+
+  # update ETCD (include monmap & mon_host)
+  if uuencode /tmp/monmap - | etcdctl "${ETCDCTL_OPTS[@]}" "${KV_TLS[@]}" set "${CLUSTER_PATH}"/monmap &>/dev/null; then
+    etcdctl "${ETCDCTL_OPTS[@]}" "${KV_TLS[@]}" rm "${CLUSTER_PATH}"/mon_host --recursive
+    log "Updated monmap on ETCD."
+  else
+    log "ERROR- Failed to update monmap on ETCD."
+  fi
+}
+
+
 ## MAIN
 function cdx_mon {
   get_mon_ip_from_public
+
+  if [ "${MON_RCY}" == "true" ]; then
+    recovery_mon
+    exit 0
+  fi
 
   if [ "${KV_TYPE}" == "etcd" ]; then
     populate_etcd
