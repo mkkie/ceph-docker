@@ -34,7 +34,7 @@ $ docker run -it --net=host --privileged=true -e CDX_ENV=true -e CEPH_VFY=all \
 ## TOOLS
 ### Fix MON
 ```txt
-$ docker run -it --net=host -e CDX_ENV=true -e DEBUG=verbose -e MON_RCY=true \
+$ docker run -it --net=host -e CDX_ENV=true -e MON_RCY=true \
   -e CEPH_PUBLIC_NETWORK="192.168.0.0/24" -v /var/lib/ceph:/var/lib/ceph \
   cdxvirt/ceph-daemon:latest cdx_mon
 ```
