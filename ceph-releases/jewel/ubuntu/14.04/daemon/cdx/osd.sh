@@ -107,10 +107,15 @@ function activate_osd {
   fi
 
   # verify and get OSD
-  if ! local OSD_ID=$(verify_osd ${disk2act}); then
-    log "WARN- The OSD disk ${disk2act} unable to activate for current Ceph cluster."
-    return 3
-  fi
+  local OSD_ID=$(verify_osd ${disk2act})
+  case ${OSD_ID} in
+    [[:digit:]]*|OSD)
+      ;;
+    *)
+      log "WARN- The OSD disk ${disk2act} unable to activate for current Ceph cluster."
+      return 3
+      ;;
+  esac
 
   # Remove the old OSD container
   local CONT_NAME=$(create_cont_name "${disk2act}" "${OSD_ID}")
