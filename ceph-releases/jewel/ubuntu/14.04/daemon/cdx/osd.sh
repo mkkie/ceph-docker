@@ -124,10 +124,17 @@ function activate_osd {
   fi
 
   # Ready to activate
-  "$DOCKER_CMD" run -d -l CLUSTER="${CLUSTER}" -l CEPH=osd -l DEV_NAME="${disk2act}" -l OSD_ID="${OSD_ID}" \
-    --name="${CONT_NAME}" --privileged=true --net=host --pid=host -v /dev:/dev "${OSD_MEM[@]}" "${OSD_CPU_CORE[@]}" \
-    -e CDX_ENV="${CDX_ENV}" -e DEBUG="${DEBUG}" -e OSD_DEVICE="${disk2act}" \
-    "${DAEMON_VERSION}" osd_ceph_disk_activate >/dev/null
+  if is_disk_ssd "${disk2act}"; then
+    "$DOCKER_CMD" run -d -l CLUSTER="${CLUSTER}" -l CEPH=osd -l DEV_NAME="${disk2act}" -l OSD_ID="${OSD_ID}" \
+      --name="${CONT_NAME}" --privileged=true --net=host --pid=host -v /dev:/dev "${OSD_MEM[@]}" "${OSD_CPU_CORE[@]}" \
+      -e CDX_ENV="${CDX_ENV}" -e DEBUG="${DEBUG}" -e OSD_DEVICE="${disk2act}" -e CRUSH_LOCATION=\"root=SSD host=${HOSTNAME}-SSD\" \
+      "${DAEMON_VERSION}" osd_ceph_disk_activate >/dev/null
+  else
+    "$DOCKER_CMD" run -d -l CLUSTER="${CLUSTER}" -l CEPH=osd -l DEV_NAME="${disk2act}" -l OSD_ID="${OSD_ID}" \
+      --name="${CONT_NAME}" --privileged=true --net=host --pid=host -v /dev:/dev "${OSD_MEM[@]}" "${OSD_CPU_CORE[@]}" \
+      -e CDX_ENV="${CDX_ENV}" -e DEBUG="${DEBUG}" -e OSD_DEVICE="${disk2act}" \
+      "${DAEMON_VERSION}" osd_ceph_disk_activate >/dev/null
+  fi
 
   # XXX: check OSD container status continuously
   sleep 3
@@ -318,6 +325,22 @@ function get_avail_disks {
   for disk in ${AVAL_D}; do
     echo "/dev/${disk}"
   done
+}
+
+function is_disk_ssd {
+  # Detemine by the value 0:SSD 1:HDD
+  if [ -z "$1" ]; then
+    log "ERROR- function is_disk_ssd need to assign a DISK."
+    exit 1
+  else
+    local DISK=$(echo "$1" | sed 's/\/dev\///g')
+    local DISK_VALUE=$(cat /sys/block/${DISK}/queue/rotational 2>/dev/null || true)
+  fi
+  if [ "${DISK_VALUE}" == "0" ]; then
+    return 0
+  else
+    return 1
+  fi
 }
 
 function get_disks {
