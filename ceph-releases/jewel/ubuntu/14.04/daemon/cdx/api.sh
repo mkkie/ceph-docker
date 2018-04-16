@@ -425,6 +425,7 @@ function link_cache_tier {
   ceph "${CLI_OPTS[@]}" osd tier cache-mode "${CACHE_POOL}" writeback &>/dev/null
   ceph "${CLI_OPTS[@]}" osd tier set-overlay "${TARGET_POOL}" "${CACHE_POOL}" >/dev/null
   ceph "${CLI_OPTS[@]}" osd pool set "${CACHE_POOL}" hit_set_type bloom &>/dev/null
+  ceph "${CLI_OPTS[@]}" osd pool set "${CACHE_POOL}" target_max_bytes 1099511627776 &>/dev/null
   echo "SUCCESS"
 }
 
