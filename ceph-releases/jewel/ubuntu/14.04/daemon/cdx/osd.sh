@@ -346,20 +346,30 @@ function is_disk_ssd {
 function get_disks {
   local BLOCKS=$(readlink /sys/class/block/* -e | grep -v "usb" | grep -o "sd[a-z]$")
   [[ -n "${BLOCKS}" ]] || ( echo "" ; return 1 )
-  local SYS_D=""
   local USB_D=$(readlink /sys/class/block/* -e | grep "usb" | grep -o "[sv]d[a-z]$" || true)
+  local RSVD_D=""
+  local SYS_D=""
   local AVAL_D=""
+  if [[ "${RESERVED_SLOT}" == *","* ]]; then
+    RESERVED_SLOT=${RESERVED_SLOT//,/ }
+  fi
+  for slot in ${RESERVED_SLOT}; do
+    local RESERVED_D="${RESERVED_D} $(docker exec toolbox port-mapping.sh -s ${slot} 2>/dev/null || true)"
+  done
   for disk in ${BLOCKS}; do
-    if [ -z "$(lsblk /dev/"${disk}" -no MOUNTPOINT)" ]; then
+    if echo "${RESERVED_D}" | grep -q "${disk}"; then
+      RSVD_D="${RSVD_D} ${disk}"
+    elif [ -z "$(lsblk /dev/"${disk}" -no MOUNTPOINT)" ]; then
       AVAL_D="${AVAL_D} ${disk}"
     else
       SYS_D="${SYS_D} ${disk}"
     fi
   done
   # Remove space in the begining
+  RSVD_D=$(echo ${RSVD_D} | sed 's/" /"/')
   AVAL_D=$(echo ${AVAL_D} | sed 's/" /"/')
   SYS_D=$(echo ${SYS_D} | sed 's/" /"/')
-  local J_FORM="{\"systemDisk\":\"${SYS_D}\",\"usbDisk\":\"${USB_D}\",\"avalDisk\":\"${AVAL_D}\"}"
+  local J_FORM="{\"systemDisk\":\"${SYS_D}\",\"usbDisk\":\"${USB_D}\",\"rsvdDisk\":\"${RSVD_D}\",\"avalDisk\":\"${AVAL_D}\"}"
   echo ${J_FORM}
 }
 
