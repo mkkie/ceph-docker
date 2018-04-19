@@ -2,6 +2,7 @@
 # CEPH VERSION: Jewel
 # CEPH VERSION DETAIL: 10.2.x
 
+
 FROM cdxvirt/ceph-base:base-10.2.10-2
 MAINTAINER Sébastien Han "seb@redhat.com"
 

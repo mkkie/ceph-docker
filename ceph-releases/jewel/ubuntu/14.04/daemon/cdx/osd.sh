@@ -27,6 +27,7 @@ function check_osd_env {
   fi
 
   # check docker command
+
   DOCKER_CMD=docker
   if ! "${DOCKER_CMD}" -v | grep -wq "version"; then
     "${DOCKER_CMD}" -v
@@ -366,6 +367,7 @@ function get_disks {
     fi
   done
   # Remove space in the begining
+
   RSVD_D=$(echo ${RSVD_D} | sed 's/" /"/')
   AVAL_D=$(echo ${AVAL_D} | sed 's/" /"/')
   SYS_D=$(echo ${SYS_D} | sed 's/" /"/')
