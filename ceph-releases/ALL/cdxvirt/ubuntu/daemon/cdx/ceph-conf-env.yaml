@@ -1,0 +1,14 @@
+auth:
+  fsid: @FSID@
+global:
+  mon_host: ceph-mon.ceph
+  osd_pool_default_pg_num: "16"
+  osd_pool_default_pgp_num: "16"
+  osd_pool_default_size: "2"
+mon:
+  mon_clock_drift_allowed: ".5"
+  mon_force_quorum_join: true
+osd:
+  osd_journal_size: "5120"
+client:
+  rbd_default_features: "5"
