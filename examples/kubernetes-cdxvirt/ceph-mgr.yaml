@@ -1,0 +1,77 @@
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  name: ceph-mgr
+  labels:
+    name: ceph-mgr
+  namespace: ceph
+spec:
+  template:
+    metadata:
+      labels:
+        name: ceph-mgr
+    spec:
+      hostNetwork: true
+      nodeSelector:
+        cdx/ceph-mon: "true"
+      volumes:
+        - name: ceph-conf-combined
+          secret:
+            secretName: ceph-conf-combined
+        - name: ceph-bootstrap-osd-keyring
+          secret:
+            secretName: ceph-bootstrap-osd-keyring
+        - name: ceph-bootstrap-mds-keyring
+          secret:
+            secretName: ceph-bootstrap-mds-keyring
+        - name: ceph-bootstrap-rgw-keyring
+          secret:
+            secretName: ceph-bootstrap-rgw-keyring
+        - name: ceph-bootstrap-rbd-keyring
+          secret:
+            secretName: ceph-bootstrap-rbd-keyring
+        - name: ceph-conf-yaml
+          secret:
+            secretName: ceph-conf-yaml
+        - name: ceph-dns-conf
+          secret:
+            secretName: ceph-dns-conf
+        - name: ceph-data
+          hostPath:
+            path: /var/lib/ceph
+      containers:
+        - name: ceph-mgr-pod
+          image: cdxvirt/ceph-daemon:daemon-13.2.1-1
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+          args: ["mgr"]
+          env:
+            - name: "CEPH_PUBLIC_NETWORK"
+              valueFrom:
+                configMapKeyRef:
+                  name: ceph-env
+                  key: CEPH_PUBLIC_NETWORK
+            - name: "CEPH_CLUSTER_NETWORK"
+              valueFrom:
+                configMapKeyRef:
+                  name: ceph-env
+                  key: CEPH_CLUSTER_NETWORK
+          volumeMounts:
+            - name: ceph-conf-combined
+              mountPath: /etc/ceph/
+            - name: ceph-bootstrap-osd-keyring
+              mountPath: /var/lib/ceph/bootstrap-osd
+            - name: ceph-bootstrap-mds-keyring
+              mountPath: /var/lib/ceph/bootstrap-mds
+            - name: ceph-bootstrap-rgw-keyring
+              mountPath: /var/lib/ceph/bootstrap-rgw
+            - name: ceph-bootstrap-rbd-keyring
+              mountPath: /var/lib/ceph/bootstrap-rbd
+            - name: ceph-conf-yaml
+              mountPath: /ceph-conf-yaml
+            - name: ceph-dns-conf
+              mountPath: /etc/resolv.conf
+              subPath: resolv.conf
+            - name: ceph-data
+              mountPath: /var/lib/ceph
