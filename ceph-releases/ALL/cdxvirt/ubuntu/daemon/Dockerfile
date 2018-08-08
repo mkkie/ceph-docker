@@ -38,7 +38,7 @@ RUN \
       apt-get update && \
       apt-get install -y  --no-install-recommends --force-yes \
           sharutils \
-          iproute grepcidr vim \
+          iproute grepcidr vim supervisor jq \
            \
            \
            \
@@ -158,7 +158,7 @@ RUN \
     # Verify that the packages installed haven't been accidentally cleaned
     apt-cache show \
           sharutils \
-          iproute grepcidr vim \
+          iproute grepcidr vim supervisor jq \
            \
            \
            \
