@@ -43,7 +43,7 @@ function rgw_boot_key {
 }
 
 function rbd_boot_key {
-  ceph-authtool "${CLUSTER}".rbd.keyring --gen-key --create-keyring -n client.bootstrap-rgw --cap mon 'allow profile bootstrap-rbd'
+  ceph-authtool "${CLUSTER}".rbd.keyring --gen-key --create-keyring -n client.bootstrap-rbd --cap mon 'allow profile bootstrap-rbd'
   kubectl create secret generic "${CLUSTER}"-bootstrap-rbd-keyring --from-file="${CLUSTER}".keyring="${CLUSTER}".rbd.keyring --namespace="${NAMESPACE}"
 }
 
