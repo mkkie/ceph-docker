@@ -8,6 +8,7 @@ global:
 mon:
   mon_clock_drift_allowed: ".5"
   mon_force_quorum_join: true
+  mgr_initial_modules: "balancer dashboard iostat prometheus status"
 osd:
   osd_journal_size: "5120"
 client:
