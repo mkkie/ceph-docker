@@ -50,11 +50,6 @@ function get_avail_disks {
   done
 }
 
-function start_osd {
-  select_osd_disks
-  prepare_active_osd
-}
-
 function select_osd_disks {
   local OSD_DEV_LIST
   local AVAIL_OSD_JSON=$(find_avail_osd)
@@ -85,11 +80,12 @@ function cdx_osd {
   for disk in $(select_osd_disks); do
     cat <<ENDHERE > /ceph-osd/"${disk}"
 [program:${disk}]
-command=/entrypoint.sh cdx_osd_dev ${disk}
+command=/entrypoint.sh cdx_osd_dev
 autostart=true
 autorestart=true
 startsecs=10
 startretries=3
+environment=OSD_DEVICE="/dev/${disk}"
 ENDHERE
   done
 

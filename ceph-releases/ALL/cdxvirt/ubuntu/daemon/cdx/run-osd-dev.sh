@@ -4,23 +4,20 @@ set -e
 source cdx/osd-verify.sh
 
 function trad_osd_activate {
-  source osd_disk_activate.sh
-  osd_activate
+  source start_osd.sh
+  OSD_TYPE="disk"
+  start_osd
 }
 
 function lvm_osd_activate {
+  ami_privileged
   source osd_volume_activate.sh
   osd_volume_activate
 }
 
-function prepare_activate {
-  prepare_trad_osd
-  trad_osd_activate
-}
-
-function prepare_trad_osd {
-  source osd_disk_prepare.sh
-  osd_disk_prepare
+function check_user_decision {
+  echo "The Device was an OSD."
+  echo "You should format or keep data on your decision."
 }
 
 function remove_lvm {
@@ -54,37 +51,30 @@ function remove_raid {
 
 ## MAIN
 function run_osd_dev {
-  # need sdx
-  if [ -z "$1" ]; then
+  # check $OSD_DEVICE as /dev/sdx
+  if [ -z "$1" ] && [ ! -b "${OSD_DEVICE}" ]; then
+    log "Bad Block Device \$OSD_DEVICE: ${OSD_DEVICE}"
     return 1
-  elif [[ "${1}" == *"/dev/"* ]]; then
-    OSD_DEVICE="${1}"
-  else
-    OSD_DEVICE="/dev/${1}"
-  fi
-  # check $OSD_DEVICE
-  if ! lsblk "${OSD_DEVICE}" &>/dev/null; then
-    exit 1
   else
     local disk=${OSD_DEVICE/\/dev\/}
   fi
   case $(verify_disk "${disk}") in
-    OSD-TRA)
+    OSD-TRA|DISK)
       trad_osd_activate
       ;;
     OSD-LVM)
       lvm_osd_activate
       ;;
-    LVM|OSD-FLVM)
+    LVM)
       remove_lvm
-      prepare_activate
+      trad_osd_activate
       ;;
     RAID)
       remove_raid
-      prepare_activate
+      trad_osd_activate
       ;;
-    DISK|OSD-FTRA|*)
-      prepare_activate
+    OSD-FLVM|OSD-FTRA|*)
+      check_user_decision
       ;;
   esac
 }
