@@ -7,4 +7,4 @@ metadata:
     cdxvirt/cluster-service: "true"
 data:
   CEPH_PUBLIC_NETWORK: 10.33.0.0/24
-  CEPH_CLUSTER_NETWORK: 10.33.0.0/24
+  CEPH_CLUSTER_NETWORK: 10.34.0.0/24

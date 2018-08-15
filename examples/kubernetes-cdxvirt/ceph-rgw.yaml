@@ -1,19 +1,19 @@
 apiVersion: extensions/v1beta1
 kind: DaemonSet
 metadata:
-  name: ceph-mgr
+  name: ceph-rgw
   labels:
-    name: ceph-mgr
+    name: ceph-rgw
   namespace: ceph
 spec:
   template:
     metadata:
       labels:
-        name: ceph-mgr
+        name: ceph-rgw
     spec:
       hostNetwork: true
       nodeSelector:
-        cdx/ceph-mgr: "true"
+        cdx/ceph-rgw: "true"
       volumes:
         - name: ceph-conf-combined
           secret:
@@ -36,16 +36,13 @@ spec:
         - name: ceph-dns-conf
           secret:
             secretName: ceph-dns-conf
-        - name: ceph-data
-          hostPath:
-            path: /var/lib/ceph
       containers:
-        - name: ceph-mgr-pod
+        - name: ceph-rgw-pod
           image: cdxvirt/ceph-daemon:daemon-13.2.1-1
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
-          args: ["mgr"]
+          args: ["rgw"]
           env:
             - name: "CEPH_PUBLIC_NETWORK"
               valueFrom:
@@ -57,6 +54,8 @@ spec:
                 configMapKeyRef:
                   name: ceph-env
                   key: CEPH_CLUSTER_NETWORK
+            - name: "RGW_CIVETWEB_PORT"
+              value: "18080"
           volumeMounts:
             - name: ceph-conf-combined
               mountPath: /etc/ceph/
@@ -73,5 +72,3 @@ spec:
             - name: ceph-dns-conf
               mountPath: /etc/resolv.conf
               subPath: resolv.conf
-            - name: ceph-data
-              mountPath: /var/lib/ceph

@@ -1,19 +1,19 @@
 apiVersion: extensions/v1beta1
 kind: DaemonSet
 metadata:
-  name: ceph-mgr
+  name: ceph-mds
   labels:
-    name: ceph-mgr
+    name: ceph-mds
   namespace: ceph
 spec:
   template:
     metadata:
       labels:
-        name: ceph-mgr
+        name: ceph-mds
     spec:
       hostNetwork: true
       nodeSelector:
-        cdx/ceph-mgr: "true"
+        cdx/ceph-mds: "true"
       volumes:
         - name: ceph-conf-combined
           secret:
@@ -36,16 +36,13 @@ spec:
         - name: ceph-dns-conf
           secret:
             secretName: ceph-dns-conf
-        - name: ceph-data
-          hostPath:
-            path: /var/lib/ceph
       containers:
-        - name: ceph-mgr-pod
+        - name: ceph-mds-pod
           image: cdxvirt/ceph-daemon:daemon-13.2.1-1
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
-          args: ["mgr"]
+          args: ["mds"]
           env:
             - name: "CEPH_PUBLIC_NETWORK"
               valueFrom:
@@ -57,6 +54,8 @@ spec:
                 configMapKeyRef:
                   name: ceph-env
                   key: CEPH_CLUSTER_NETWORK
+            - name: "CEPHFS_CREATE"
+              value: "1"
           volumeMounts:
             - name: ceph-conf-combined
               mountPath: /etc/ceph/
@@ -73,5 +72,3 @@ spec:
             - name: ceph-dns-conf
               mountPath: /etc/resolv.conf
               subPath: resolv.conf
-            - name: ceph-data
-              mountPath: /var/lib/ceph

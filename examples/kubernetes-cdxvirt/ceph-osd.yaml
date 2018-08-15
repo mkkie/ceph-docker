@@ -45,9 +45,6 @@ spec:
         - name: ceph-dns-conf
           secret:
             secretName: ceph-dns-conf
-        - name: ceph-data
-          hostPath:
-            path: /var/lib/ceph
         - name: dev
           hostPath:
             path: /dev/
@@ -91,7 +88,5 @@ spec:
             - name: ceph-dns-conf
               mountPath: /etc/resolv.conf
               subPath: resolv.conf
-            - name: ceph-data
-              mountPath: /var/lib/ceph
             - name: dev
               mountPath: /dev
