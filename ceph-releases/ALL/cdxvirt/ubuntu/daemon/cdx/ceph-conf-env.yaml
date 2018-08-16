@@ -5,6 +5,8 @@ global:
   osd_pool_default_pg_num: "16"
   osd_pool_default_pgp_num: "16"
   osd_pool_default_size: "2"
+  @CEPH_PUBLIC_NETWORK@
+  @CEPH_CLUSTER_NETWORK@
 mon:
   mon_clock_drift_allowed: ".5"
   mon_force_quorum_join: true

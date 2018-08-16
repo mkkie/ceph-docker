@@ -46,17 +46,6 @@ spec:
           securityContext:
             privileged: true
           args: ["mgr"]
-          env:
-            - name: "CEPH_PUBLIC_NETWORK"
-              valueFrom:
-                configMapKeyRef:
-                  name: ceph-env
-                  key: CEPH_PUBLIC_NETWORK
-            - name: "CEPH_CLUSTER_NETWORK"
-              valueFrom:
-                configMapKeyRef:
-                  name: ceph-env
-                  key: CEPH_CLUSTER_NETWORK
           volumeMounts:
             - name: ceph-conf-combined
               mountPath: /etc/ceph/

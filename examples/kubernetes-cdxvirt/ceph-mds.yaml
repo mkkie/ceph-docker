@@ -44,16 +44,6 @@ spec:
             privileged: true
           args: ["mds"]
           env:
-            - name: "CEPH_PUBLIC_NETWORK"
-              valueFrom:
-                configMapKeyRef:
-                  name: ceph-env
-                  key: CEPH_PUBLIC_NETWORK
-            - name: "CEPH_CLUSTER_NETWORK"
-              valueFrom:
-                configMapKeyRef:
-                  name: ceph-env
-                  key: CEPH_CLUSTER_NETWORK
             - name: "CEPHFS_CREATE"
               value: "1"
           volumeMounts:

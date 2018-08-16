@@ -13,8 +13,18 @@ function ceph_conf {
   fsid=$(uuidgen)
   sed -r "s/@CLUSTER@/${CLUSTER:-ceph}/g" \
     /etc/confd/conf.d/ceph.conf.toml.in > /etc/confd/conf.d/ceph.conf.toml
-  sed -i "s/@FSID@/${fsid}/" /cdx/ceph-conf-env.yaml
   sed -i "s/by Confd/by Confd {{datetime}}/" /etc/confd/templates/ceph.conf.tmpl
+  sed -i "s/@FSID@/${fsid}/" /cdx/ceph-conf-env.yaml
+  if [ -n "${CEPH_PUBLIC_NETWORK}" ]; then
+    sed -i "s#@CEPH_PUBLIC_NETWORK@#public_network: ${CEPH_PUBLIC_NETWORK}#" /cdx/ceph-conf-env.yaml
+  else
+    sed -i "s#@CEPH_PUBLIC_NETWORK@##" /cdx/ceph-conf-env.yaml
+  fi
+  if [ -n "${CEPH_CLUSTER_NETWORK}" ]; then
+    sed -i "s#@CEPH_CLUSTER_NETWORK@#cluster_network: ${CEPH_CLUSTER_NETWORK}#" /cdx/ceph-conf-env.yaml
+  else
+    sed -i "s#@CEPH_CLUSTER_NETWORK@##" /cdx/ceph-conf-env.yaml
+  fi
   confd -onetime -backend file -file /cdx/ceph-conf-env.yaml
   kubectl create secret generic ceph-conf-yaml --from-file=/cdx/ceph-conf-env.yaml --namespace="${NAMESPACE}"
 }

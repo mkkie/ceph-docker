@@ -55,17 +55,6 @@ spec:
           securityContext:
             privileged: true
           args: ["cdx_osd"]
-          env:
-            - name: "CEPH_PUBLIC_NETWORK"
-              valueFrom:
-                configMapKeyRef:
-                  name: ceph-env
-                  key: CEPH_PUBLIC_NETWORK
-            - name: "CEPH_CLUSTER_NETWORK"
-              valueFrom:
-                configMapKeyRef:
-                  name: ceph-env
-                  key: CEPH_CLUSTER_NETWORK
           volumeMounts:
             - name: docker
               mountPath: /bin/docker

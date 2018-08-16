@@ -44,16 +44,6 @@ spec:
             privileged: true
           args: ["rgw"]
           env:
-            - name: "CEPH_PUBLIC_NETWORK"
-              valueFrom:
-                configMapKeyRef:
-                  name: ceph-env
-                  key: CEPH_PUBLIC_NETWORK
-            - name: "CEPH_CLUSTER_NETWORK"
-              valueFrom:
-                configMapKeyRef:
-                  name: ceph-env
-                  key: CEPH_CLUSTER_NETWORK
             - name: "RGW_CIVETWEB_PORT"
               value: "18080"
           volumeMounts:
