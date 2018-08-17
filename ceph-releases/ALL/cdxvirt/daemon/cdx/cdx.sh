@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+source cdx/cdx-env.sh
+source cdx/config-key.sh
+
 function cdx_entrypoint {
   remove_tmp
   CDX_CMD=$(echo ${1} | sed 's/cdx_//')

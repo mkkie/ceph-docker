@@ -1,34 +1,6 @@
 #!/bin/bash
 set -e
 
-: "${FORCE_FORMAT:=LVM RAID}"
-
-function find_avail_osd {
-  # Use shared mem to store parallel variables
-  local OSD_READY_LIST=/dev/shm/OSD_READY_LIST && printf "" > "${OSD_READY_LIST}"
-  local OSD_AVAIL_LIST=/dev/shm/OSD_AVAIL_LIST && printf "" > "${OSD_AVAIL_LIST}"
-  local NOT_AVAIL_LIST=/dev/shm/NOT_AVAIL_LIST && printf "" > "${NOT_AVAIL_LIST}"
-  # Determine to format LVM & RAID
-  echo "${FORCE_FORMAT}" | grep -q "LVM" && local A="LVM" || local A="FALSE"
-  echo "${FORCE_FORMAT}" | grep -q "RAID" && local B="RAID" || local B="FALSE"
-  # Verify every available disks
-  for disk in $(get_disks | jq --raw-output .avalDisk); do
-    case $(verify_disk "${disk}") in
-      OSD-TRA|OSD-LVM)
-        printf "${disk} " >> "${OSD_READY_LIST}" ;;
-      ${A}|${B}|DISK)
-        printf "${disk} " >> "${OSD_AVAIL_LIST}" ;;
-      *)
-        printf "${disk} " >> "${NOT_AVAIL_LIST}" ;;
-    esac &
-  done
-  wait
-  OSD_READY_LIST=$(cat ${OSD_READY_LIST})
-  OSD_AVAIL_LIST=$(cat ${OSD_AVAIL_LIST})
-  NOT_AVAIL_LIST=$(cat ${NOT_AVAIL_LIST})
-  echo "{\"osdReady\":\"${OSD_READY_LIST}\",\"osdAvail\":\"${OSD_AVAIL_LIST}\",\"notAvail\":\"${NOT_AVAIL_LIST}\"}"
-}
-
 function verify_disk {
   # need sdx
   if [ -z "$1" ]; then

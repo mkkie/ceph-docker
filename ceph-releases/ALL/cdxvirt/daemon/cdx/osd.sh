@@ -3,8 +3,11 @@ set -e
 
 source cdx/osd-verify.sh
 
-: "${RESERVED_SLOT:=}"
-: "${MAX_OSD:=8}"
+function osd_env_init {
+  init_kv "${OSD_KV_PATH}/max_osd" "${MAX_OSD}"
+  init_kv "${OSD_KV_PATH}/reserved_slot" "${RESERVED_SLOT}"
+  init_kv "${OSD_KV_PATH}/force_format" "${FORCE_FORMAT}"
+}
 
 function docker {
   if DOCKER_CMD=$(which docker) 2>/dev/null; then
@@ -13,12 +16,13 @@ function docker {
 }
 
 function get_disks {
-  local BLOCKS=$(readlink /sys/class/block/* -e | grep -v "usb" | grep -o "sd[a-z]$")
+  local BLOCKS=$(readlink /sys/class/block/* -e | grep -v "usb" | grep -o "[sv]d[a-z]$")
   [[ -n "${BLOCKS}" ]] || ( echo "" ; return 1 )
   local USB_D=$(readlink /sys/class/block/* -e | grep "usb" | grep -o "[sv]d[a-z]$" || true)
   local RSVD_D
   local SYS_D
   local AVAL_D
+  local RESERVED_SLOT=$(get_kv "${OSD_KV_PATH}/reserved_slot")
   if [[ "${RESERVED_SLOT}" == *","* ]]; then
     RESERVED_SLOT=${RESERVED_SLOT//,/ }
   fi
@@ -43,11 +47,31 @@ function get_disks {
   echo ${J_FORM}
 }
 
-function get_avail_disks {
-  local AVAL_D=$(get_disks | jq --raw-output .avalDisk)
-  for disk in ${AVAL_D}; do
-    echo "/dev/${disk}"
+function find_avail_osd {
+  # Use shared mem to store parallel variables
+  local OSD_READY_LIST=/dev/shm/OSD_READY_LIST && printf "" > "${OSD_READY_LIST}"
+  local OSD_AVAIL_LIST=/dev/shm/OSD_AVAIL_LIST && printf "" > "${OSD_AVAIL_LIST}"
+  local NOT_AVAIL_LIST=/dev/shm/NOT_AVAIL_LIST && printf "" > "${NOT_AVAIL_LIST}"
+  # Determine to format LVM & RAID
+  local FORCE_FORMAT=$(get_kv "${OSD_KV_PATH}/force_format")
+  echo "${FORCE_FORMAT}" | grep -q "LVM" && local A="LVM" || local A="FALSE"
+  echo "${FORCE_FORMAT}" | grep -q "RAID" && local B="RAID" || local B="FALSE"
+  # Verify every available disks
+  for disk in $(get_disks | jq --raw-output .avalDisk); do
+    case $(verify_disk "${disk}") in
+      OSD-TRA|OSD-LVM)
+        printf "${disk} " >> "${OSD_READY_LIST}" ;;
+      ${A}|${B}|DISK)
+        printf "${disk} " >> "${OSD_AVAIL_LIST}" ;;
+      *)
+        printf "${disk} " >> "${NOT_AVAIL_LIST}" ;;
+    esac &
   done
+  wait
+  OSD_READY_LIST=$(cat ${OSD_READY_LIST})
+  OSD_AVAIL_LIST=$(cat ${OSD_AVAIL_LIST})
+  NOT_AVAIL_LIST=$(cat ${NOT_AVAIL_LIST})
+  echo "{\"osdReady\":\"${OSD_READY_LIST}\",\"osdAvail\":\"${OSD_AVAIL_LIST}\",\"notAvail\":\"${NOT_AVAIL_LIST}\"}"
 }
 
 function select_osd_disks {
@@ -56,6 +80,7 @@ function select_osd_disks {
   local OSD_READY_NUM=$(echo ${AVAIL_OSD_JSON} | jq --raw-output .osdReady | wc -w)
   local OSD_AVAIL_LIST=$(echo ${AVAIL_OSD_JSON} | jq --raw-output .osdAvail)
   local OSD_AVAIL_NUM=$(echo ${AVAIL_OSD_JSON} | jq --raw-output .osdAvail | wc -w)
+  local MAX_OSD=$(get_kv "${OSD_KV_PATH}/max_osd")
   local NEW_OSD_NUM=$(expr "${MAX_OSD}" - "${OSD_READY_NUM}")
   local counter=0
 
@@ -71,6 +96,8 @@ function select_osd_disks {
 
 ## MAIN
 function cdx_osd {
+  # Check OSD Global KV
+  osd_env_init
   # Preparation, only run once
   mkdir -p /ceph-osd /var/log/supervisor/
   lvmetad &>/dev/null || true
