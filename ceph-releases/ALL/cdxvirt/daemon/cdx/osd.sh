@@ -39,12 +39,19 @@ function get_disks {
     fi
   done
   # Remove space in the begining
-
   RSVD_D=$(echo ${RSVD_D} | sed 's/" /"/')
   AVAL_D=$(echo ${AVAL_D} | sed 's/" /"/')
   SYS_D=$(echo ${SYS_D} | sed 's/" /"/')
-  local J_FORM="{\"systemDisk\":\"${SYS_D}\",\"usbDisk\":\"${USB_D}\",\"rsvdDisk\":\"${RSVD_D}\",\"avalDisk\":\"${AVAL_D}\"}"
-  echo ${J_FORM}
+  # two kind of outputs
+  if [ "${1}" == "list" ]; then
+    for disk in ${SYS_D}; do echo "${disk} system"; done
+    for disk in ${USB_D}; do echo "${disk} usb"; done
+    for disk in ${RSVD_D}; do echo "${disk} reserved"; done
+    for disk in ${AVAL_D}; do echo "${disk} osd"; done
+  else
+    local J_FORM="{\"systemDisk\":\"${SYS_D}\",\"usbDisk\":\"${USB_D}\",\"rsvdDisk\":\"${RSVD_D}\",\"avalDisk\":\"${AVAL_D}\"}"
+    echo ${J_FORM}
+  fi
 }
 
 function find_avail_osd {

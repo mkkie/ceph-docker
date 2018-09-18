@@ -51,6 +51,8 @@ function remove_raid {
 
 ## MAIN
 function run_osd_dev {
+  # We not run osd in container, skip docker_exec.sh.
+  unset exec
   # check $OSD_DEVICE as /dev/sdx
   if [ -z "$1" ] && [ ! -b "${OSD_DEVICE}" ]; then
     log "Bad Block Device \$OSD_DEVICE: ${OSD_DEVICE}"
