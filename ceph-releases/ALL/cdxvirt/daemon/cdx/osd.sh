@@ -1,7 +1,8 @@
 #!/bin/bash
 set -e
 
-source cdx/osd-verify.sh
+source /cdx/osd-verify.sh
+source /cdx/config-key.sh
 
 function osd_env_init {
   init_kv "${OSD_KV_PATH}/max_osd" "${MAX_OSD}"
@@ -101,16 +102,10 @@ function select_osd_disks {
   echo "${OSD_DEV_LIST}"
 }
 
-## MAIN
-function cdx_osd {
-  # Check OSD Global KV
-  osd_env_init
-  # Preparation, only run once
-  mkdir -p /ceph-osd /var/log/supervisor/
-  lvmetad &>/dev/null || true
-  echo "files = /ceph-osd/*" >> /etc/supervisor/supervisord.conf
-
+function update_osd_supv_conf {
   # Select OSD and create supervisor configs
+  mkdir -p /ceph-osd
+  rm -f /ceph-osd/*
   for disk in $(select_osd_disks); do
     cat <<ENDHERE > /ceph-osd/"${disk}"
 [program:${disk}]
@@ -122,6 +117,17 @@ startretries=3
 environment=OSD_DEVICE="/dev/${disk}"
 ENDHERE
   done
+}
 
+## MAIN
+function cdx_osd {
+  # Check OSD Global KV
+  osd_env_init
+  # Preparation, only run once
+  mkdir -p /var/log/supervisor/
+  lvmetad &>/dev/null || true
+  echo "files = /ceph-osd/*" >> /etc/supervisor/supervisord.conf
+  # Real jobs
+  update_osd_supv_conf
   exec supervisord -n
 }

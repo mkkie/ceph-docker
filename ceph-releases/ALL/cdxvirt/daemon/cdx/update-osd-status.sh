@@ -12,6 +12,12 @@ function get_ip {
   echo "${ip}"
 }
 
+function get_dev_slot {
+  local dev="${1}"
+  local slot=$(docker exec toolbox port-mapping.sh -b ${dev} 2>/dev/null || true)
+  echo "${slot}"
+}
+
 function get_osd_status {
   local dev="${1}"
   local app="${2}"
@@ -36,7 +42,7 @@ function update_disk_info {
     local dev=${DISK[${count}]}
     local app=${DISK[$(expr ${count} + 1)]}
     local count_ind=$(expr ${count} / 2 )
-    local J_FORM="{\"name\":\"${dev}\",\"application\":\"${app}\",\"osdStatus\":\"$(get_osd_status ${dev} ${app})\",\"osdId\":\"$(get_osd_id ${dev})\"}"
+    local J_FORM="{\"name\":\"${dev}\",\"slot\":\"$(get_dev_slot ${dev})\",\"application\":\"${app}\",\"osdStatus\":\"$(get_osd_status ${dev} ${app})\",\"osdId\":\"$(get_osd_id ${dev})\"}"
     JSON=$(echo ${JSON} | jq ".devices[${count_ind}] |= .+ ${J_FORM}")
     let count=count+2
   done
@@ -47,5 +53,4 @@ DISK=($(get_disks list | sort))
 SVS_STATUS=$(supervisorctl status)
 JSON=$(get_basic_form)
 update_disk_info
-mkdir -p /ceph-osd-status/
-echo ${JSON} | jq . > /ceph-osd-status/index.html
+echo ${JSON} | jq . > /ceph-osd-status

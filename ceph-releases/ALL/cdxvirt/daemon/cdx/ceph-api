@@ -1,0 +1,51 @@
+#!/bin/bash
+
+# Default Variables
+source /cdx/api.sh
+CDX_CEPH_API_VER="2.0"
+
+# Get options & usage
+function usage_exit {
+  echo -e "cdx-ceph-api:"
+  echo -e "\t-h, help\tThis help"
+  echo -e "\t-d\t\tDebug, show the argvs"
+  echo -e "\tstart_osd\tStart osds in this node."
+  echo -e "\tstop_osd\tStop osds in this node."
+  echo -e "\tversion\t\tShow current api version."
+  exit 1
+}
+
+while getopts "hd" OPT 2>/dev/null; do
+  case ${OPT} in
+    d) DEBUG=true ;;
+    *) usage_exit ;;
+  esac
+done
+
+shift $((OPTIND-1))
+ARGS=($@)
+OPERATION=${ARGS[0]}
+
+# Main
+if [ "${DEBUG}" == "true" ]; then
+  echo "=== DEBUG ==="
+  echo "OPERATION: ${OPERATION}"
+  printf "ARGS: "
+  count=1
+  while [ "${count}" -lt "${#ARGS[@]}" ]; do
+    printf "${ARGS[${count}]} "
+    let count=count+1
+  done
+  printf "\n\n"
+fi
+
+case ${OPERATION} in
+  start_osd)
+    start_osd_api ;;
+  stop_osd)
+    stop_osd_api ;;
+  version)
+    echo "${CDX_CEPH_API_VER}" ;;
+  *)
+    usage_exit ;;
+esac

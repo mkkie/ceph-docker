@@ -1,8 +1,7 @@
 #!/bin/bash
 set -e
 
-source cdx/cdx-env.sh
-source cdx/config-key.sh
+source /cdx/cdx-env.sh
 
 function cdx_entrypoint {
   remove_tmp
@@ -10,27 +9,42 @@ function cdx_entrypoint {
   case "${CDX_CMD}" in
     bash)
       shift
-      /bin/bash $@
+      if [ -z "${1}" ]; then
+        /bin/bash $@
+      else
+        $@
+      fi
+      ;;
+    ceph_api)
+      shift
+      /cdx/ceph-api $@
       ;;
     mon)
-      source cdx/mon.sh
-      source start_mon.sh
+      source /cdx/mon.sh
+      source /start_mon.sh
       cdx_mon
       start_mon
       ;;
     osd)
-      source cdx/osd.sh
+      source /cdx/osd.sh
       cdx_osd
       ;;
     osd_dev)
-      source cdx/run-osd-dev.sh
+      source /cdx/run-osd-dev.sh
       shift
       run_osd_dev $@
       ;;
     *)
-      echo "See cdx/cdx.sh"
+      usage_exit
       ;;
   esac
+}
+
+function usage_exit {
+  echo -e "cdx_entrypoint:"
+  echo -e "\tcdx_bash\tExecute any command you want."
+  echo -e "\tcdx_ceph_api\tExecute ceph-api to maintain ceph cluster."
+  exit 1
 }
 
 function remove_tmp {

@@ -1,17 +1,17 @@
 #!/bin/bash
 set -e
 
-source cdx/osd-verify.sh
+source /cdx/osd-verify.sh
 
 function trad_osd_activate {
-  source start_osd.sh
+  source /start_osd.sh
   OSD_TYPE="disk"
   start_osd
 }
 
 function lvm_osd_activate {
   ami_privileged
-  source osd_volume_activate.sh
+  source /osd_volume_activate.sh
   osd_volume_activate
 }
 
