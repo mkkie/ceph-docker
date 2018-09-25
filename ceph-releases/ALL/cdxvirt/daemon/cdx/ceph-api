@@ -9,6 +9,7 @@ function usage_exit {
   echo -e "cdx-ceph-api:"
   echo -e "\t-h, help\tThis help"
   echo -e "\t-d\t\tDebug, show the argvs"
+  echo -e "\tmon_status\tShow status of monitors."
   echo -e "\tstart_osd\tStart osds in this node."
   echo -e "\tstop_osd\tStop osds in this node."
   echo -e "\tversion\t\tShow current api version."
@@ -40,6 +41,10 @@ if [ "${DEBUG}" == "true" ]; then
 fi
 
 case ${OPERATION} in
+  mon_status)
+    mon_status ;;
+  reload_osd)
+    reload_osd ;;
   start_osd)
     start_osd_api ;;
   stop_osd)

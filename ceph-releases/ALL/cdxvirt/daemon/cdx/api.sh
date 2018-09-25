@@ -78,3 +78,21 @@ function reload_osd {
   update_osd_supv_conf
 }
 
+function mon_status {
+  local HEALTH_LOG=$(ceph "${CLI_OPTS[@]}" status -f json 2>/dev/null)
+  local MON_JSON=$(echo "${HEALTH_LOG}" | jq -r ".monmap.mons[] |= .+ {\"status\":\"\"} | .monmap.mons")
+  local MON_DOWN_MSG=$(echo "${HEALTH_LOG}" | jq -r .health.checks.MON_DOWN.summary.message)
+  # if message == null, monitors are health
+  if [ "${MON_DOWN_MSG}" != "null" ]; then
+    for mon in $(echo ${MON_JSON} | jq -r ".[].name"); do
+      if echo ${MON_DOWN_MSG} | grep -q -w ${mon}; then
+        MON_JSON=$(echo ${MON_JSON} | jq "map(if .name == \"${mon}\" then .status=\"health\" else . end)")
+      else
+        MON_JSON=$(echo ${MON_JSON} | jq "map(if .name == \"${mon}\" then .status=\"down\" else . end)")
+       fi
+    done
+    echo "${MON_JSON}" | jq "."
+  else
+    echo "${MON_JSON}" | jq ".[].status |= \"health\""
+  fi
+}
