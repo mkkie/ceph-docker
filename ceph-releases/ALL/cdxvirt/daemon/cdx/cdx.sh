@@ -19,6 +19,10 @@ function cdx_entrypoint {
       shift
       /cdx/ceph-api $@
       ;;
+    controller)
+      source /cdx/controller.sh
+      cdx_controller
+      ;;
     mon)
       source /cdx/mon.sh
       source /start_mon.sh

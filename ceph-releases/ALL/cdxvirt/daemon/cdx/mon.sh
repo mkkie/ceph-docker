@@ -9,7 +9,7 @@ function get_mon_ip_from_public {
 }
 
 function create_ceph_ep {
-  if ! kubectl get ep -n ceph ceph-mon &>/dev/null; then
+  if ! ${KUBECTL} get ep -n ceph ceph-mon &>/dev/null; then
   cat <<ENDHERE > ceph-mon-ep.yaml
 apiVersion: v1
 kind: Endpoints
@@ -25,7 +25,7 @@ subsets:
   - port: 6789
     protocol: TCP
 ENDHERE
-  cat ceph-mon-ep.yaml | kubectl create -f - && \
+  cat ceph-mon-ep.yaml | ${KUBECTL} create -f - && \
     log "Domain Name ceph-mon.ceph created." || sleep 2
   fi
 }
@@ -33,7 +33,8 @@ ENDHERE
 ## MAIN
 function cdx_mon {
   # /etc/ceph could be update anytime. Store MONMAP to another place.
-  MONMAP=/tmp/monmap
+  MONMAP=/cdx/monmap
+  MON_KEYRING=/cdx/${CLUSTER}.mon.keyring
   get_mon_ip_from_public
   create_ceph_ep
 }

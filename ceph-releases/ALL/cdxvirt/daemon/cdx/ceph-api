@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # Default Variables
+source /cdx/cdx-env.sh
 source /cdx/api.sh
 CDX_CEPH_API_VER="2.0"
 
@@ -43,6 +44,10 @@ fi
 case ${OPERATION} in
   mon_status)
     mon_status ;;
+  osd_status)
+    /cdx/update-osd-status.sh
+    cat /ceph-osd-status
+    ;;
   reload_osd)
     reload_osd ;;
   start_osd)
