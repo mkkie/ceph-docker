@@ -82,10 +82,6 @@ function rbd_boot_key {
   ${KUBECTL} create secret generic "${CLUSTER}"-bootstrap-rbd-keyring --from-file="${CLUSTER}".keyring="${CLUSTER}".rbd.keyring --namespace="${NAMESPACE}"
 }
 
-function ceph_dns_conf {
-  ${KUBECTL} create secret generic ceph-dns-conf --from-file=resolv.conf=/cdx/ceph-dns.conf --namespace="${NAMESPACE}"
-}
-
 ########
 # MAIN #
 ########
@@ -99,4 +95,3 @@ mds_boot_key
 rgw_boot_key
 rbd_boot_key
 ceph_conf_combined
-ceph_dns_conf
