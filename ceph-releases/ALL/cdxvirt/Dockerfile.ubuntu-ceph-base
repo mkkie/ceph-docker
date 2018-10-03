@@ -1,0 +1,9 @@
+FROM ubuntu:16.04
+MAINTAINER VSDX
+
+RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
+      apt-get install -y --no-install-recommends --force-yes \
+      iproute grepcidr vim supervisor jq && \
+      apt-get clean
+
+ADD daemon/cdx/ /cdx
