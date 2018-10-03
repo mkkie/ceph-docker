@@ -23,9 +23,6 @@ case "$KV_TYPE" in
     # TAG: kv_type_k8s
     source /config.k8s.sh
     ;;
-  cdx)
-    source cdx/config.sh
-    ;;
   *)
     source /config.static.sh
     ;;

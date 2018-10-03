@@ -1,0 +1,24 @@
+FROM @CDXVIRT_BASE_IMG@
+MAINTAINER VSDX
+
+# Add s3cfg file
+ADD s3cfg /root/.s3cfg
+
+# Add templates for confd
+ADD ./confd/templates/* /etc/confd/templates/
+ADD ./confd/conf.d/* /etc/confd/conf.d/
+
+# Add bootstrap script, ceph defaults key/values for KV store
+ADD *.sh ceph.defaults check_zombie_mons.py ./osd_scenarios/* entrypoint.sh.in disabled_scenario /
+
+# Add cdxvirt scripts
+ADD cdx /cdx
+
+# Modify the entrypoint
+RUN bash "/generate_entrypoint.sh" && \
+  rm -f /generate_entrypoint.sh && \
+  bash -n /*.sh
+
+# Execute the entrypoint
+WORKDIR /
+ENTRYPOINT ["/entrypoint.sh"]
