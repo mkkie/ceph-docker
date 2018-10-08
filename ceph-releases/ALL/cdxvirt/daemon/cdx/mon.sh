@@ -34,7 +34,6 @@ ENDHERE
 function cdx_mon {
   # /etc/ceph could be update anytime. Store MONMAP to another place.
   MONMAP=/cdx/monmap
-  MON_KEYRING=/cdx/${CLUSTER}.mon.keyring
   get_mon_ip_from_public
   create_ceph_ep
 }

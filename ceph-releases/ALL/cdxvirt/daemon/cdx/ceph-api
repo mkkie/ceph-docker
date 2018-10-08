@@ -11,6 +11,7 @@ function usage_exit {
   echo -e "\t-h, help\tThis help"
   echo -e "\t-d\t\tDebug, show the argvs"
   echo -e "\tmon_status\tShow status of monitors."
+  echo -e "\tosd_status\tShow status of OSDs."
   echo -e "\tstart_osd\tStart osds in this node."
   echo -e "\tstop_osd\tStop osds in this node."
   echo -e "\tversion\t\tShow current api version."
