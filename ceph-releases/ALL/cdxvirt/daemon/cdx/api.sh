@@ -96,3 +96,8 @@ function mon_status {
     echo "${MON_JSON}" | jq ".[].status |= \"health\""
   fi
 }
+
+function dashboard_init {
+  ceph dashboard create-self-signed-cert
+  ceph dashboard set-login-credentials "${DASHBOARD_USER}" "${DASHBOARD_PASSWORD}"
+}
