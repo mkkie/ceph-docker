@@ -11,6 +11,10 @@
 : "${MAX_OSD:=8}"
 : "${FORCE_FORMAT:="LVM RAID"}"
 
+# dashboard
+: "${DASHBOARD_USER:=vsdx}"
+: "${DASHBOARD_PASSWORD:=vsdx}"
+
 # K8S
 : "${NEW_KUBECONFIG:="/etc/kubernetes/kubeconfig-admin"}"
 if $(which kubectl) get pod &>/dev/null; then

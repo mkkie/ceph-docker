@@ -10,6 +10,7 @@ function usage_exit {
   echo -e "cdx-ceph-api:"
   echo -e "\t-h, help\tThis help"
   echo -e "\t-d\t\tDebug, show the argvs"
+  echo -e "\tdashboard_init\tInitialize the Dashboard."
   echo -e "\tmon_status\tShow status of monitors."
   echo -e "\tosd_status\tShow status of OSDs."
   echo -e "\tstart_osd\tStart osds in this node."
@@ -43,6 +44,8 @@ if [ "${DEBUG}" == "true" ]; then
 fi
 
 case ${OPERATION} in
+  dashboard_init)
+    dashboard_init ;;
   mon_status)
     mon_status ;;
   osd_status)
