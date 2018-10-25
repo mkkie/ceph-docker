@@ -16,9 +16,12 @@
 : "${DASHBOARD_PASSWORD:=vsdx}"
 
 # K8S
-: "${NEW_KUBECONFIG:="/etc/kubernetes/kubeconfig-admin"}"
-if $(which kubectl) get pod &>/dev/null; then
-  KUBECTL=$(which kubectl)
-else
-  KUBECTL="$(which kubectl) --kubeconfig=${NEW_KUBECONFIG}"
+: "${KUBECTL:=$(which kubectl)}"
+: "${SECRET_DIR:=/k8s-secret}"
+if [ -d "${SECRET_DIR}" ] && [ -n "$(ls -A ${SECRET_DIR})" ]; then
+  cp ${SECRET_DIR}/bootstrap-mds/ceph.keyring /var/lib/ceph/bootstrap-mds/
+  cp ${SECRET_DIR}/bootstrap-osd/ceph.keyring /var/lib/ceph/bootstrap-osd/
+  cp ${SECRET_DIR}/bootstrap-rbd/ceph.keyring /var/lib/ceph/bootstrap-rbd/
+  cp ${SECRET_DIR}/bootstrap-rgw/ceph.keyring /var/lib/ceph/bootstrap-rgw/
+  cp ${SECRET_DIR}/ceph/ceph.* /etc/ceph/
 fi

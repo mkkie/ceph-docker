@@ -32,8 +32,6 @@ ENDHERE
 
 ## MAIN
 function cdx_mon {
-  # /etc/ceph could be update anytime. Store MONMAP to another place.
-  MONMAP=/cdx/monmap
   get_mon_ip_from_public
   create_ceph_ep
 }

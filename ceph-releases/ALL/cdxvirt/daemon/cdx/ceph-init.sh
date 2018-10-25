@@ -2,31 +2,16 @@
 
 : "${CLUSTER:=ceph}"
 : "${NAMESPACE:=ceph}"
-: "${RBD_KEY:=true}"
-: "${KUBE_APISERVER:="https://10.0.0.1:443"}"
-: "${NEW_KUBECONFIG:="/etc/kubernetes/kubeconfig-admin"}"
-: "${CA_PATH:="/etc/kubernetes/ca.crt"}"
-: "${TOKEN_PATH:="/etc/kubernetes/tokens/admin"}"
-if $(which kubectl) get pod &>/dev/null; then
-  KUBECTL=$(which kubectl)
-else
-  KUBECTL="$(which kubectl) --kubeconfig=${NEW_KUBECONFIG}"
-fi
+: "${KUBECTL:=$(which kubectl)}"
 
-
-function k8s_key {
+function k8s_check {
   if ${KUBECTL} get pod &>/dev/null; then
     return 0
+  else
+    echo "Failed to get k8s info, please check \$KUBECTL"
+    echo "Current KUBECTL setting: ${KUBECTL}."
+    exit 1
   fi
-  TOKEN=$(cat ${TOKEN_PATH})
-  $(which kubectl) config set-cluster local --certificate-authority="${CA_PATH}" \
-    --embed-certs=true --server="${KUBE_APISERVER}" --kubeconfig="${NEW_KUBECONFIG}"
-  $(which kubectl) config set-credentials admin-user \
-    --token="${TOKEN}" --kubeconfig="${NEW_KUBECONFIG}"
-  $(which kubectl) config set-context default \
-  --cluster=local --user=admin-user --kubeconfig="${NEW_KUBECONFIG}"
-  $(which kubectl) config use-context default --kubeconfig="${NEW_KUBECONFIG}"
-  $(which kubectl) --kubeconfig="${NEW_KUBECONFIG}" create secret generic k8s-key --from-file="${NEW_KUBECONFIG}" --namespace="${NAMESPACE}"
 }
 
 function ceph_conf_combined {
@@ -86,7 +71,7 @@ function rbd_boot_key {
 # MAIN #
 ########
 
-k8s_key
+k8s_check
 ceph_conf
 admin_key
 mon_key
