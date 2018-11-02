@@ -4,7 +4,7 @@ MAINTAINER VSDX
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
       apt-get install -y -f && \
       apt-get install -y --no-install-recommends --force-yes \
-      iproute grepcidr vim supervisor jq && \
+      iproute grepcidr vim supervisor jq curl iputils-ping && \
       apt-get clean && \
       rm -rf /var/lib/apt/lists/* \
              /var/cache/debconf/* \
